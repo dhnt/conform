@@ -689,8 +689,8 @@ Valid second assertion.
 			wantErr: "F-01: missing ```console block",
 		},
 		{
-			name: "unterminated_console_block",
-			md: "### F-01\nProse.\n```console\n$ form list\n",
+			name:    "unterminated_console_block",
+			md:      "### F-01\nProse.\n```console\n$ form list\n",
 			wantErr: "F-01: unterminated ```console block",
 		},
 		{
@@ -699,8 +699,8 @@ Valid second assertion.
 			wantErr: "F-01: missing 'exit: N' line",
 		},
 		{
-			name: "missing_exit_line_before_next_heading",
-			md: "### F-01\nProse.\n```console\n$ form list\n```\n\n### F-02\nSecond.\n```console\n$ form list\n```\nexit: 0\n",
+			name:    "missing_exit_line_before_next_heading",
+			md:      "### F-01\nProse.\n```console\n$ form list\n```\n\n### F-02\nSecond.\n```console\n$ form list\n```\nexit: 0\n",
 			wantErr: "F-01: missing 'exit: N' line",
 		},
 		{
