@@ -22,6 +22,7 @@ const usage = `usage: conform <command> [args]
 
 commands:
   run       execute a CONTRACT.md suite
+  cert      certify a candidate against a reference and write sealed evidence
   version   print the suite version
 `
 
@@ -56,6 +57,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	switch args[0] {
 	case "run":
 		return runContract(args[1:], stdout, stderr)
+	case "cert":
+		return runCert(args[1:], stdout, stderr)
 	case "version":
 		fmt.Fprintln(stdout, conform.Version)
 		return 0

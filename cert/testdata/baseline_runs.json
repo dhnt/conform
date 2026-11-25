@@ -1,0 +1,91 @@
+{
+  "reference_runs": [
+    [
+      {"name": "F-01", "status": "PASS", "detail": "ok"},
+      {"name": "F-02", "status": "PASS", "detail": "ok"},
+      {"name": "F-03", "status": "PASS", "detail": "ok"},
+      {"name": "F-04", "status": "PASS", "detail": "ok"},
+      {"name": "F-05", "status": "FAIL", "detail": "reference environment mismatch"}
+    ],
+    [
+      {"name": "F-01", "status": "PASS", "detail": "ok"},
+      {"name": "F-02", "status": "FAIL", "detail": "intermittent port race"},
+      {"name": "F-03", "status": "INCONCLUSIVE", "detail": "command timed out after 30s"},
+      {"name": "F-04", "status": "PASS", "detail": "ok"},
+      {"name": "F-05", "status": "FAIL", "detail": "reference environment mismatch"}
+    ]
+  ],
+  "expected_noisy": ["F-02", "F-03", "F-05"],
+  "candidates": [
+    {
+      "label": "noisy_failure_becomes_inconclusive",
+      "results": [
+        {"name": "F-01", "status": "PASS", "detail": "ok"},
+        {"name": "F-02", "status": "FAIL", "detail": "port conflict"},
+        {"name": "F-03", "status": "PASS", "detail": "ok"},
+        {"name": "F-04", "status": "PASS", "detail": "ok"},
+        {"name": "F-05", "status": "PASS", "detail": "ok"}
+      ],
+      "expected_verdict": "INCONCLUSIVE",
+      "expected_statuses": {
+        "F-01": "PASS",
+        "F-02": "INCONCLUSIVE",
+        "F-03": "PASS",
+        "F-04": "PASS",
+        "F-05": "PASS"
+      }
+    },
+    {
+      "label": "clean_pass_even_on_noisy_assertions",
+      "results": [
+        {"name": "F-01", "status": "PASS", "detail": "ok"},
+        {"name": "F-02", "status": "PASS", "detail": "ok"},
+        {"name": "F-03", "status": "PASS", "detail": "ok"},
+        {"name": "F-04", "status": "PASS", "detail": "ok"},
+        {"name": "F-05", "status": "PASS", "detail": "ok"}
+      ],
+      "expected_verdict": "PASS",
+      "expected_statuses": {
+        "F-01": "PASS",
+        "F-02": "PASS",
+        "F-03": "PASS",
+        "F-04": "PASS",
+        "F-05": "PASS"
+      }
+    },
+    {
+      "label": "non_noisy_failure_dominates_noisy_inconclusive",
+      "results": [
+        {"name": "F-01", "status": "FAIL", "detail": "wrong status"},
+        {"name": "F-02", "status": "FAIL", "detail": "flaky"},
+        {"name": "F-03", "status": "PASS", "detail": "ok"},
+        {"name": "F-04", "status": "PASS", "detail": "ok"},
+        {"name": "F-05", "status": "PASS", "detail": "ok"}
+      ],
+      "expected_verdict": "FAIL",
+      "expected_statuses": {
+        "F-01": "FAIL",
+        "F-02": "INCONCLUSIVE",
+        "F-03": "PASS",
+        "F-04": "PASS",
+        "F-05": "PASS"
+      }
+    },
+    {
+      "label": "missing_non_noisy_assertion_is_fail",
+      "results": [
+        {"name": "F-01", "status": "PASS", "detail": "ok"},
+        {"name": "F-02", "status": "PASS", "detail": "ok"},
+        {"name": "F-03", "status": "PASS", "detail": "ok"}
+      ],
+      "expected_verdict": "FAIL",
+      "expected_statuses": {
+        "F-01": "PASS",
+        "F-02": "PASS",
+        "F-03": "PASS",
+        "F-04": "FAIL",
+        "F-05": "INCONCLUSIVE"
+      }
+    }
+  ]
+}

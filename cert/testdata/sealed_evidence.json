@@ -1,0 +1,62 @@
+{
+  "conform_version": "0.0.0-dev",
+  "contract_sha256": "b4ec3a9f4430fa0aa207b27b6b768e259f2b5018d29b8aad1658579284f95318",
+  "candidate": {
+    "name": "candidate-form",
+    "digest": "sha256:aaaa1111"
+  },
+  "reference": {
+    "name": "reference-form",
+    "digest": "sha256:bbbb2222"
+  },
+  "environment": {
+    "os": "linux",
+    "arch": "amd64",
+    "go_version": "go1.27.4",
+    "shell": "sh"
+  },
+  "baseline": {
+    "runs": 2,
+    "noisy": [],
+    "reference_runs": [
+      {
+        "F-01": "PASS",
+        "F-02": "PASS"
+      },
+      {
+        "F-01": "PASS",
+        "F-02": "PASS"
+      }
+    ]
+  },
+  "layers": {
+    "cli": "PASS",
+    "ui": "PASS"
+  },
+  "verdict": "PASS",
+  "results": [
+    {
+      "layer": "cli",
+      "name": "F-01",
+      "status": "PASS",
+      "detail": "ok",
+      "freshness": "fresh"
+    },
+    {
+      "layer": "cli",
+      "name": "F-02",
+      "status": "PASS",
+      "detail": "ok",
+      "freshness": "reused"
+    },
+    {
+      "layer": "ui",
+      "name": "ui-inventory",
+      "status": "PASS",
+      "detail": "ok",
+      "freshness": "fresh"
+    }
+  ],
+  "timestamp": "2026-11-25T21:30:00Z",
+  "seal": "8c897e0a60c7ae96d3f74e62956a818c2253eee167f5ea67b7e202076229172c"
+}
