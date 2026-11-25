@@ -1,0 +1,17 @@
+<!doctype html><html><body>
+<form>
+  <label for="external">External * </label>
+  <div data-field="external"><input id="external" name="external" required></div>
+  <div data-field="wrap"><label>Wrapped <input name="wrap" type="text"></label></div>
+  <div data-field="pick" data-kind="choice"><label>Pick</label><select required><option value="">Choose</option><option value="a">A</option><option value="b">B</option></select></div>
+  <div data-field="radio"><label>Radio</label><div role="radiogroup"><label class="desk-option"><input type="radio" value="yes"> Yes <span class="desk-recommended">recommended</span></label><label class="desk-option"><input type="radio" value="no">No</label></div></div>
+  <div data-field="multi"><label>Multi</label><label class="desk-option"><input type="checkbox" value="a">A</label><label class="desk-option"><input type="checkbox">Fallback</label></div>
+  <div data-field="hidden-attr" hidden><label>Hidden</label><input></div>
+  <div data-field="hidden-style" style="color:red; DISPLAY : none !important"><label>Hidden</label><input></div>
+  <div data-field="hidden-control"><label>Hidden</label><input type="hidden" value="secret"></div>
+  <div data-field="mixed"><label>Mixed</label><input type="hidden"><textarea aria-required="true"></textarea></div>
+  <button data-desk-save> Save <span aria-hidden="true">ignore</span> now </button><button type="submit">Submit</button>
+  <button hidden>Bad button</button>
+</form>
+<section style="display: none"><form><div data-field="ghost"><label>Ghost</label><input></div><button>Save</button></form></section>
+</body></html>
