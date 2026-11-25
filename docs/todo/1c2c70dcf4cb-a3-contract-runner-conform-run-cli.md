@@ -3,7 +3,7 @@ id: 1c2c70dcf4cb
 kind: feature
 title: A3 contract runner + conform run CLI
 seq: 758
-status: assigned
+status: done
 priority: p0
 labels:
     - conform
@@ -13,6 +13,8 @@ assignee: agy-gemini4-neon
 sprint: 722
 sprint_id: ffc7a05d-4229-598a-8834-4c1212246274
 sprint_title: 'dhnt/conform, then: does the spec reproduce the app?'
+closed: 2026-11-25T21:34:58.520322Z
+closed_by: claude-opus5.5
 ---
 
 Depends on A2. contract.Run(ctx, []Assertion, Env) []Result: runs each assertion's commands in order via a configurable shell (default sh -c; Env sets dir, PATH prefix, extra env, per-step timeout), threads Bindings across steps, INCONCLUSIVE on timeout/start failure. CLI: `conform run CONTRACT.md [--dir D] [--path P] [--shell S] [--timeout 30s] [--json]` prints one line per assertion 'PASS|FAIL|INCONCLUSIVE <name> <detail>' (or JSON array), exit 1 if any FAIL/INCONCLUSIVE. Port semantics of execute_contract_suite (grader_lib.py ~1296-1432) minus agent-bench specifics (no form building, no hard-rule log scanning). Tests use a tiny fake CLI written as a shell script in testdata. Acceptance: unit tests green incl. timeout and binding-across-steps cases.

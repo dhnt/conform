@@ -3,11 +3,13 @@ id: 86364406f739
 kind: feature
 title: A4b walker recognizes standard semantic HTML, not only desk-kit markup
 seq: 762
-status: todo
+status: assigned
 priority: p0
 labels:
     - conform
 created: 2026-11-25T21:30:03.329434Z
+weave: 4
+assignee: codex-gpt6-sol
 sprint: 722
 sprint_id: ffc7a05d-4229-598a-8834-4c1212246274
 sprint_title: 'dhnt/conform, then: does the spec reproduce the app?'
