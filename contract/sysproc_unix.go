@@ -26,3 +26,9 @@ func configureCmd(cmd *exec.Cmd) {
 	}
 	cmd.WaitDelay = 500 * time.Millisecond
 }
+
+func killProcessGroup(cmd *exec.Cmd) {
+	if cmd.Process != nil {
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
+}

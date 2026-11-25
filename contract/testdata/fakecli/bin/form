@@ -161,6 +161,15 @@ case "$sub" in
         pwd -P
         ;;
 
+    home-state)
+        if [ -f "$HOME/.fake-home-state" ]; then
+            printf 'old\n'
+        else
+            printf 'new\n'
+            : > "$HOME/.fake-home-state"
+        fi
+        ;;
+
     both)
         printf 'stdout-line\n'
         printf 'stderr-line\n' >&2

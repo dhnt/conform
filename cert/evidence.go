@@ -82,6 +82,39 @@ func ResultsForLayer(layer Layer, results []contract.Result, freshness Freshness
 	return out
 }
 
+// ResultsByAssertion tags each result with the corresponding assertion's layer.
+func ResultsByAssertion(assertions []contract.Assertion, results []contract.Result, freshness Freshness) []EvidenceResult {
+	out := make([]EvidenceResult, 0, len(results))
+	for _, r := range results {
+		layer := assertionLayer(assertions, r.Name)
+		out = append(out, EvidenceResult{Layer: layer, Name: r.Name, Status: r.Status, Detail: r.Detail, Freshness: freshness})
+	}
+	return out
+}
+
+// LayerVerdicts derives each present layer's verdict from assertion kinds.
+func LayerVerdicts(assertions []contract.Assertion, results []contract.Result) map[Layer]Verdict {
+	grouped := map[Layer][]Verdict{}
+	for _, r := range results {
+		layer := assertionLayer(assertions, r.Name)
+		grouped[layer] = append(grouped[layer], r.Status)
+	}
+	layers := map[Layer]Verdict{}
+	for layer, verdicts := range grouped {
+		layers[layer] = CombineVerdicts(verdicts...)
+	}
+	return layers
+}
+
+func assertionLayer(assertions []contract.Assertion, name string) Layer {
+	for _, a := range assertions {
+		if a.Name == name && a.Kind == "ui" {
+			return LayerUI
+		}
+	}
+	return LayerCLI
+}
+
 // Evidence is a sealed certification record.
 type Evidence struct {
 	ConformVersion string            `json:"conform_version"`

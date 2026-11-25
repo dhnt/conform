@@ -33,6 +33,24 @@ apply in later steps. `--json` output is compared structurally; `"..."` marks
 an open, implementation-varying field. Plain text is checked only where the
 contract gives it.
 
+UI assertions use a `ui` block with a GET URL and the expected form inventory:
+
+````markdown
+### U-01
+The rendered form exposes its required controls.
+```ui
+GET http://localhost:{PORT}/?id={ID}
+{"fields":[{"id":"name","label":"Full name","kind":"text","required":true}],"buttons":["Save"]}
+```
+````
+
+`conform run CONTRACT.md --fresh-home` gives each run a new HOME and TMPDIR.
+`--reset-cmd CMD` runs a command before each run. `--kill-strays` stops background
+processes left by a CLI step; leave it off when later assertions need a server.
+`conform mutate CONTRACT.md --path BIN_DIR --fresh-home` runs the default CLI
+and UI mutants and reports the killed fraction. Add `--json` for a
+`cert.MutationReport`.
+
 ## Use
 
 ```sh

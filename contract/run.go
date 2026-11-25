@@ -3,12 +3,20 @@ package contract
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/dhnt/conform/walk"
 )
 
 // DefaultTimeout is the per-step timeout used when Env.Timeout is zero or negative.
@@ -35,6 +43,16 @@ type Env struct {
 	// Bindings optionally supplies initial placeholder bindings. Run clones this
 	// map before executing so the caller's Env is never mutated across runs.
 	Bindings Bindings
+	// FreshHome gives each Run a fresh temporary HOME and TMPDIR.
+	FreshHome bool
+	// ResetCmd runs once before the assertions, in the same environment.
+	ResetCmd string
+	// KillStrays kills surviving members of a command's process group after it exits.
+	KillStrays bool
+	// UITransform may alter fetched HTML before inventory; used by mutation testing.
+	UITransform func(name string, html []byte) ([]byte, error)
+	// UIObserved receives the original fetched HTML and inventory.
+	UIObserved func(name string, html []byte, inventory walk.InventoryResult)
 }
 
 // Run executes each assertion's commands sequentially using env and returns one
@@ -51,11 +69,32 @@ func Run(ctx context.Context, assertions []Assertion, env Env) []Result {
 	}
 	shell := resolveShell(env.Shell)
 	procEnv := buildProcessEnv(os.Environ(), env.Extra, env.PathPrefix)
+	if env.FreshHome {
+		home, err := os.MkdirTemp("", "conform-home-*")
+		if err != nil {
+			return inconclusiveAll(assertions, fmt.Sprintf("create fresh home: %v", err))
+		}
+		defer os.RemoveAll(home)
+		procEnv = freshHomeEnv(procEnv, home)
+	}
 	bindings := env.Bindings.Clone()
+	if env.ResetCmd != "" {
+		_, stderr, code, status, detail := runStep(ctx, env.Dir, shell, procEnv, timeout, env.ResetCmd, env.KillStrays)
+		if status != "" {
+			return inconclusiveAll(assertions, "reset command: "+detail)
+		}
+		if code != 0 {
+			return inconclusiveAll(assertions, fmt.Sprintf("reset command exited %d: %s", code, truncate(Normalize(stderr), 140)))
+		}
+	}
 
 	results := make([]Result, 0, len(assertions))
 	for _, a := range assertions {
-		results = append(results, runAssertion(ctx, a, env.Dir, shell, procEnv, timeout, bindings))
+		if a.Kind == "ui" {
+			results = append(results, runUIAssertion(ctx, a, timeout, bindings, env.UITransform, env.UIObserved))
+		} else {
+			results = append(results, runAssertion(ctx, a, env.Dir, shell, procEnv, timeout, bindings, env.KillStrays))
+		}
 	}
 	return results
 }
@@ -68,6 +107,7 @@ func runAssertion(
 	procEnv []string,
 	timeout time.Duration,
 	bindings Bindings,
+	killStrays bool,
 ) Result {
 	if len(a.Commands) == 0 {
 		return Result{
@@ -99,7 +139,7 @@ func runAssertion(
 			}
 		}
 
-		out, errOut, code, status, detail := runStep(ctx, dir, shell, procEnv, timeout, cmdStr)
+		out, errOut, code, status, detail := runStep(ctx, dir, shell, procEnv, timeout, cmdStr, killStrays)
 		if status != "" {
 			return Result{
 				Name:   a.Name,
@@ -138,6 +178,7 @@ func runStep(
 	procEnv []string,
 	timeout time.Duration,
 	cmdStr string,
+	killStrays bool,
 ) (stdout, stderr string, exitCode int, status Status, detail string) {
 	stepCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -152,6 +193,9 @@ func runStep(
 	}
 	cmd.Env = procEnv
 	configureCmd(cmd)
+	if killStrays {
+		defer killProcessGroup(cmd)
+	}
 
 	var outBuf, errBuf bytes.Buffer
 	cmd.Stdout = &outBuf
@@ -181,6 +225,116 @@ func runStep(
 	}
 
 	return stdout, stderr, -1, INCONCLUSIVE, fmt.Sprintf("failed to start command: %v", err)
+}
+
+func inconclusiveAll(assertions []Assertion, detail string) []Result {
+	results := make([]Result, len(assertions))
+	for i, a := range assertions {
+		results[i] = Result{Name: a.Name, Status: INCONCLUSIVE, Detail: detail}
+	}
+	return results
+}
+
+func freshHomeEnv(base []string, home string) []string {
+	out := make([]string, 0, len(base)+3)
+	for _, kv := range base {
+		key, _, _ := strings.Cut(kv, "=")
+		if key == "HOME" || key == "TMPDIR" || strings.HasPrefix(key, "XDG_") {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return append(out, "HOME="+home, "TMPDIR="+home, "XDG_CONFIG_HOME="+filepath.Join(home, ".config"))
+}
+
+func runUIAssertion(ctx context.Context, a Assertion, timeout time.Duration, bindings Bindings, transform func(string, []byte) ([]byte, error), observed func(string, []byte, walk.InventoryResult)) Result {
+	result := Result{Name: a.Name}
+	rawURL, err := Substitute(a.URL, bindings)
+	if err != nil {
+		result.Status, result.Detail = FAIL, err.Error()
+		return result
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Scheme != "http" && u.Scheme != "https" || u.Host == "" {
+		result.Status, result.Detail = INCONCLUSIVE, "invalid UI URL"
+		return result
+	}
+	host := u.Hostname()
+	if host != "localhost" && host != "127.0.0.1" && host != "::1" {
+		result.Status, result.Detail = INCONCLUSIVE, "UI URL must use a loopback host"
+		return result
+	}
+	if ip := net.ParseIP(host); ip != nil && !ip.IsLoopback() {
+		result.Status, result.Detail = INCONCLUSIVE, "UI URL must use a loopback host"
+		return result
+	}
+	var expected walk.InventoryResult
+	if err := json.Unmarshal([]byte(a.Expected), &expected); err != nil {
+		result.Status, result.Detail = INCONCLUSIVE, fmt.Sprintf("invalid UI definition: %v", err)
+		return result
+	}
+	stepCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(stepCtx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		result.Status, result.Detail = INCONCLUSIVE, fmt.Sprintf("build UI request: %v", err)
+		return result
+	}
+	transport := &http.Transport{Proxy: nil}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport, CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		h := req.URL.Hostname()
+		if h != "localhost" && h != "127.0.0.1" && h != "::1" {
+			return errors.New("redirect to non-loopback host")
+		}
+		if len(via) >= 10 {
+			return errors.New("too many UI redirects")
+		}
+		return nil
+	}}
+	resp, err := client.Do(req)
+	if err != nil {
+		result.Status, result.Detail = INCONCLUSIVE, fmt.Sprintf("UI GET: %v", err)
+		return result
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		result.Status, result.Detail = FAIL, fmt.Sprintf("UI GET returned HTTP %d", resp.StatusCode)
+		return result
+	}
+	html, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		result.Status, result.Detail = INCONCLUSIVE, fmt.Sprintf("read UI page: %v", err)
+		return result
+	}
+	got, err := walk.Inventory(bytes.NewReader(html))
+	if err != nil {
+		result.Status, result.Detail = INCONCLUSIVE, fmt.Sprintf("inventory UI page: %v", err)
+		return result
+	}
+	if observed != nil {
+		observed(a.Name, html, got)
+	}
+	if transform != nil {
+		html, err = transform(a.Name, html)
+		if err != nil {
+			result.Status, result.Detail = INCONCLUSIVE, fmt.Sprintf("transform UI page: %v", err)
+			return result
+		}
+		got, err = walk.Inventory(bytes.NewReader(html))
+		if err != nil {
+			result.Status, result.Detail = INCONCLUSIVE, fmt.Sprintf("inventory transformed UI page: %v", err)
+			return result
+		}
+	}
+	ok, detail := walk.CompareWithDefinition(got, expected.Fields, expected.Buttons)
+	result.Detail = detail
+	if ok {
+		result.Status = PASS
+	} else {
+		result.Status = FAIL
+	}
+	return result
 }
 
 func resolveShell(shell []string) []string {

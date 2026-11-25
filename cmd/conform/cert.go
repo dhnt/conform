@@ -32,6 +32,9 @@ flags:
   --dir D                 working directory (default isolated temp dir per run)
   --shell S               shell used to run contract commands (default "sh -c")
   --timeout D             per-step command timeout (default 30s)
+  --fresh-home            use an empty HOME and TMPDIR per run
+  --reset-cmd CMD         run CMD before each run
+  --kill-strays           kill the step process group after each step
 `
 
 type certOpts struct {
@@ -46,6 +49,9 @@ type certOpts struct {
 	dir             string
 	shell           string
 	timeout         time.Duration
+	freshHome       bool
+	resetCmd        string
+	killStrays      bool
 }
 
 func runCert(args []string, stdout, stderr io.Writer) int {
@@ -109,6 +115,9 @@ func runCert(args []string, stdout, stderr io.Writer) int {
 			PathPrefix: refShimDir,
 			Shell:      shell,
 			Timeout:    opts.timeout,
+			FreshHome:  opts.freshHome,
+			ResetCmd:   opts.resetCmd,
+			KillStrays: opts.killStrays,
 		}
 		res := contract.Run(ctx, assertions, env)
 		cleanup()
@@ -127,13 +136,14 @@ func runCert(args []string, stdout, stderr io.Writer) int {
 		PathPrefix: candShimDir,
 		Shell:      shell,
 		Timeout:    opts.timeout,
+		FreshHome:  opts.freshHome,
+		ResetCmd:   opts.resetCmd,
+		KillStrays: opts.killStrays,
 	})
 	cleanupCand()
 
-	gradedCLI, cliVerdict := cert.Grade(candResults, baseline)
-	layers := map[cert.Layer]cert.Verdict{
-		cert.LayerCLI: cliVerdict,
-	}
+	graded, _ := cert.Grade(candResults, baseline)
+	layers := cert.LayerVerdicts(assertions, graded)
 
 	shellName := opts.shell
 	if shellName == "" {
@@ -149,7 +159,7 @@ func runCert(args []string, stdout, stderr io.Writer) int {
 		Baseline:       &baseline,
 		Layers:         layers,
 		Verdict:        cert.CombineLayers(layers),
-		Results:        cert.ResultsForLayer(cert.LayerCLI, gradedCLI, cert.Fresh),
+		Results:        cert.ResultsByAssertion(assertions, graded, cert.Fresh),
 		Timestamp:      time.Now().UTC().Format(time.RFC3339),
 	}
 	rec.ApplySeal()
@@ -215,8 +225,22 @@ func parseCertArgs(args []string) (certOpts, error) {
 		switch name {
 		case "h", "help":
 			return opts, errHelp
+		case "fresh-home", "kill-strays":
+			b := true
+			if hasVal {
+				var err error
+				b, err = strconv.ParseBool(val)
+				if err != nil {
+					return opts, fmt.Errorf("invalid value %q for --%s: %w", val, name, err)
+				}
+			}
+			if name == "fresh-home" {
+				opts.freshHome = b
+			} else {
+				opts.killStrays = b
+			}
 		case "contract", "reference-cmd", "candidate-cmd", "runs", "out",
-			"candidate-digest", "reference-digest", "bin", "dir", "shell", "timeout":
+			"candidate-digest", "reference-digest", "bin", "dir", "shell", "timeout", "reset-cmd":
 			if !hasVal {
 				if i+1 >= len(args) {
 					return opts, fmt.Errorf("flag --%s requires a value", name)
@@ -249,6 +273,8 @@ func parseCertArgs(args []string) (certOpts, error) {
 				opts.dir = val
 			case "shell":
 				opts.shell = val
+			case "reset-cmd":
+				opts.resetCmd = val
 			case "timeout":
 				d, err := time.ParseDuration(val)
 				if err != nil {

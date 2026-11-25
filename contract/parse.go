@@ -13,6 +13,8 @@ import (
 type Assertion struct {
 	Name     string
 	Prose    string
+	Kind     string
+	URL      string
 	Commands []string
 	Expected string
 	Exit     int
@@ -56,11 +58,15 @@ func Parse(r io.Reader) ([]Assertion, error) {
 		i++
 
 		var proseLines []string
-		foundConsole := false
+		blockKind := ""
 		for i < len(lines) {
 			s := strings.TrimSpace(lines[i])
 			if strings.HasPrefix(s, "```console") {
-				foundConsole = true
+				blockKind = "cli"
+				break
+			}
+			if s == "```ui" {
+				blockKind = "ui"
 				break
 			}
 			if headingRe.MatchString(s) {
@@ -71,10 +77,10 @@ func Parse(r io.Reader) ([]Assertion, error) {
 			}
 			i++
 		}
-		if !foundConsole {
+		if blockKind == "" {
 			return nil, fmt.Errorf("%s: missing ```console block", name)
 		}
-		i++ // skip opening ```console
+		i++ // skip opening fence
 
 		var consoleLines []string
 		closed := false
@@ -87,9 +93,23 @@ func Parse(r io.Reader) ([]Assertion, error) {
 			i++
 		}
 		if !closed {
-			return nil, fmt.Errorf("%s: unterminated ```console block", name)
+			if blockKind == "cli" {
+				return nil, fmt.Errorf("%s: unterminated ```console block", name)
+			}
+			return nil, fmt.Errorf("%s: unterminated ```ui block", name)
 		}
 		i++ // skip closing ```
+		if blockKind == "ui" {
+			if len(consoleLines) < 2 || !strings.HasPrefix(strings.TrimSpace(consoleLines[0]), "GET ") {
+				return nil, fmt.Errorf("%s: ui block must start with GET URL and a JSON definition", name)
+			}
+			url := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(consoleLines[0]), "GET "))
+			if url == "" {
+				return nil, fmt.Errorf("%s: empty UI URL", name)
+			}
+			assertions = append(assertions, Assertion{Name: name, Prose: strings.Join(proseLines, " "), Kind: "ui", URL: url, Expected: strings.TrimSpace(strings.Join(consoleLines[1:], "\n"))})
+			continue
+		}
 
 		hasExit := false
 		expectedExit := 0
@@ -136,6 +156,7 @@ func Parse(r io.Reader) ([]Assertion, error) {
 		assertions = append(assertions, Assertion{
 			Name:     name,
 			Prose:    strings.Join(proseLines, " "),
+			Kind:     "cli",
 			Commands: commands,
 			Expected: expOut,
 			Exit:     expectedExit,

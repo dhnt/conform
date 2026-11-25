@@ -54,6 +54,9 @@ func TestRunContractTextAndFlagsAfterFile(t *testing.T) {
 		"--path", fakeBinDir,
 		"--shell", "/bin/sh -c",
 		"--timeout", "10s",
+		"--fresh-home",
+		"--reset-cmd", "true",
+		"--kill-strays",
 	}, &out, &errb)
 	if code != 0 {
 		t.Fatalf("code=%d want 0\nstdout:\n%s\nstderr:\n%s", code, out.String(), errb.String())

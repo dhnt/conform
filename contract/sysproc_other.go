@@ -14,3 +14,5 @@ func defaultShell() []string {
 func configureCmd(cmd *exec.Cmd) {
 	cmd.WaitDelay = 500 * time.Millisecond
 }
+
+func killProcessGroup(cmd *exec.Cmd) {}

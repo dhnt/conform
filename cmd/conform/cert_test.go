@@ -3,6 +3,9 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +15,33 @@ import (
 	"github.com/dhnt/conform/cert"
 	"github.com/dhnt/conform/contract"
 )
+
+func TestCertMixedCLiAndUILayers(t *testing.T) {
+	page, err := os.ReadFile(filepath.Join("..", "..", "contract", "testdata", "fakecli", "page.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(page) }))
+	defer server.Close()
+	md := fmt.Sprintf("### F-01\nList.\n```console\n$ form list\nID\tSTATUS\n```\nexit: 0\n\n### U-01\nInspect.\n```ui\nGET %s/\n{\"fields\":[{\"id\":\"name\",\"label\":\"Full name\",\"required\":true}],\"buttons\":[\"Save\",\"Submit\"]}\n```\n", server.URL)
+	contractFile := filepath.Join(t.TempDir(), "CONTRACT.md")
+	if err := os.WriteFile(contractFile, []byte(md), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, bin := fixturePaths(t)
+	var out, errb bytes.Buffer
+	code := run([]string{"cert", "--contract", contractFile, "--reference-cmd", filepath.Join(bin, "form"), "--candidate-cmd", filepath.Join(bin, "form"), "--fresh-home"}, &out, &errb)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	var evidence cert.Evidence
+	if err := json.Unmarshal(out.Bytes(), &evidence); err != nil {
+		t.Fatal(err)
+	}
+	if evidence.Layers[cert.LayerCLI] != cert.PASS || evidence.Layers[cert.LayerUI] != cert.PASS || len(evidence.Results) != 2 || evidence.Results[1].Layer != cert.LayerUI {
+		t.Fatalf("evidence: %+v", evidence)
+	}
+}
 
 func TestCertPassAndSealedEvidence(t *testing.T) {
 	contractFile, fakeBinDir := fixturePaths(t)

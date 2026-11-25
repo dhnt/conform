@@ -1,6 +1,7 @@
 package cert
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -56,13 +57,18 @@ func Mutate(ctx context.Context, assertions []contract.Assertion, env Environmen
 	if err != nil {
 		return report, fmt.Errorf("baseline: %w", err)
 	}
+	var failed []string
 	for i, ok := range baseline {
 		if !ok {
 			if i < len(assertions) {
-				return report, fmt.Errorf("baseline assertion %s is not PASS", assertions[i].Name)
+				failed = append(failed, assertions[i].Name)
+			} else {
+				failed = append(failed, "UI comparison")
 			}
-			return report, fmt.Errorf("baseline UI comparison is not PASS")
 		}
+	}
+	if len(failed) > 0 {
+		return report, fmt.Errorf("baseline not PASS: %s", strings.Join(failed, ", "))
 	}
 	for i, m := range mutants {
 		if m.Name == "" || m.Apply == nil || m.Layer != LayerCLI && m.Layer != LayerUI {
@@ -156,17 +162,31 @@ func DefaultMutants(assertions []contract.Assertion, inventory walk.InventoryRes
 		}
 		out = append(out, cliMutant(a.Name+"/exit", command, pattern, "exit", ""))
 	}
+	return append(out, defaultUIMutants("", inventory)...)
+}
+
+// DefaultUIMutants targets the HTML fetched by one UI assertion.
+func DefaultUIMutants(assertion string, inventory walk.InventoryResult) []Mutant {
+	return defaultUIMutants(assertion, inventory)
+}
+
+func defaultUIMutants(assertion string, inventory walk.InventoryResult) []Mutant {
+	prefix := "UI/"
+	if assertion != "" {
+		prefix = assertion + "/"
+	}
+	var out []Mutant
 	for _, f := range inventory.Fields {
 		id := f.ID
-		out = append(out, uiMutant("UI/field/"+id+"/label", id, "label", ""))
-		out = append(out, uiMutant("UI/field/"+id+"/required", id, "required", ""))
-		out = append(out, uiMutant("UI/field/"+id+"/hidden", id, "hidden", ""))
+		out = append(out, uiMutant(prefix+"field/"+id+"/label", assertion, id, "label", ""))
+		out = append(out, uiMutant(prefix+"field/"+id+"/required", assertion, id, "required", ""))
+		out = append(out, uiMutant(prefix+"field/"+id+"/hidden", assertion, id, "hidden", ""))
 		for _, option := range f.Options {
-			out = append(out, uiMutant("UI/field/"+id+"/option/"+option, id, "option", option))
+			out = append(out, uiMutant(prefix+"field/"+id+"/option/"+option, assertion, id, "option", option))
 		}
 	}
 	for _, button := range inventory.Buttons {
-		out = append(out, uiMutant("UI/button/"+button, "", "button", button))
+		out = append(out, uiMutant(prefix+"button/"+button, assertion, "", "button", button))
 	}
 	return out
 }
@@ -243,96 +263,142 @@ exit "$code"
 	}}
 }
 
-func uiMutant(name, id, mode, value string) Mutant {
+func uiMutant(name, assertion, id, mode, value string) Mutant {
 	return Mutant{Name: name, Layer: LayerUI, Apply: func(env *Environment) (func(), error) {
-		root, err := html.Parse(strings.NewReader(env.HTML))
+		if assertion != "" {
+			env.CLI.UITransform = func(gotName string, fetched []byte) ([]byte, error) {
+				if gotName != assertion {
+					return fetched, nil
+				}
+				return mutateHTML(fetched, id, mode, value)
+			}
+			return nil, nil
+		}
+		mutated, err := mutateHTML([]byte(env.HTML), id, mode, value)
 		if err != nil {
 			return nil, err
 		}
-		var target *html.Node
+		env.HTML = string(mutated)
+		return nil, nil
+	}}
+}
+
+func mutateHTML(source []byte, id, mode, value string) ([]byte, error) {
+	root, err := html.Parse(bytes.NewReader(source))
+	if err != nil {
+		return nil, err
+	}
+	var target *html.Node
+	visitNode(root, func(n *html.Node) {
+		if target == nil && n.Type == html.ElementNode && attrNode(n, "data-field") == id && id != "" {
+			target = n
+		}
+	})
+	if target == nil && id != "" {
 		visitNode(root, func(n *html.Node) {
-			if target == nil && n.Type == html.ElementNode && attrNode(n, "data-field") == id && id != "" {
+			if target == nil && n.Type == html.ElementNode && (attrNode(n, "name") == id || attrNode(n, "id") == id) {
 				target = n
 			}
 		})
-		if target == nil && id != "" {
-			visitNode(root, func(n *html.Node) {
-				if target == nil && n.Type == html.ElementNode && (attrNode(n, "name") == id || attrNode(n, "id") == id) {
+	}
+	if mode == "button" {
+		visitNode(root, func(n *html.Node) {
+			if target != nil || n.Type != html.ElementNode {
+				return
+			}
+			if n.Data == "button" {
+				label := strings.Join(strings.Fields(nodeText(n)), " ")
+				if label == "" {
+					label = strings.Join(strings.Fields(attrNode(n, "aria-label")), " ")
+				}
+				if label == value {
 					target = n
 				}
-			})
-		}
-		if mode == "button" {
-			visitNode(root, func(n *html.Node) {
-				if target == nil && n.Type == html.ElementNode && n.Data == "button" && strings.Join(strings.Fields(nodeText(n)), " ") == value {
+			} else if n.Data == "input" {
+				typeName := strings.ToLower(attrNode(n, "type"))
+				label := strings.TrimSpace(attrNode(n, "value"))
+				if label == "" && typeName == "submit" {
+					label = "Submit"
+				}
+				if label == "" && typeName == "reset" {
+					label = "Reset"
+				}
+				if label == "" {
+					label = strings.TrimSpace(attrNode(n, "aria-label"))
+				}
+				if (typeName == "submit" || typeName == "reset" || typeName == "button") && label == value {
 					target = n
 				}
-			})
+			}
+		})
+	}
+	if target == nil {
+		return nil, fmt.Errorf("UI target %q not found", id+value)
+	}
+	switch mode {
+	case "hidden", "button":
+		setAttr(target, "hidden", "")
+	case "label":
+		var label *html.Node
+		visitNode(root, func(n *html.Node) {
+			if label == nil && n.Type == html.ElementNode && n.Data == "label" && attrNode(n, "for") == id {
+				label = n
+			}
+		})
+		visitNode(target, func(n *html.Node) {
+			if label == nil && n.Type == html.ElementNode && n.Data == "label" && !strings.Contains(attrNode(n, "class"), "desk-option") {
+				label = n
+			}
+		})
+		if label == nil {
+			label = target
 		}
-		if target == nil {
-			return nil, fmt.Errorf("UI target %q not found", id+value)
+		for child := label.FirstChild; child != nil; {
+			next := child.NextSibling
+			label.RemoveChild(child)
+			child = next
 		}
-		switch mode {
-		case "hidden", "button":
-			setAttr(target, "hidden", "")
-		case "label":
-			var label *html.Node
+		setAttr(label, "aria-label", "__mutant_label__")
+	case "required":
+		wasRequired := false
+		visitNode(target, func(n *html.Node) {
+			for _, a := range n.Attr {
+				if a.Key == "required" || a.Key == "aria-required" && a.Val == "true" {
+					wasRequired = true
+				}
+			}
+		})
+		if strings.Contains(nodeText(target), "*") {
+			wasRequired = true
+		}
+		if wasRequired {
 			visitNode(target, func(n *html.Node) {
-				if label == nil && n.Type == html.ElementNode && n.Data == "label" && !strings.Contains(attrNode(n, "class"), "desk-option") {
-					label = n
+				removeAttr(n, "required")
+				removeAttr(n, "aria-required")
+				if n.Type == html.TextNode {
+					n.Data = strings.ReplaceAll(n.Data, "*", "")
 				}
 			})
-			if label == nil {
-				label = target
-			}
-			for child := label.FirstChild; child != nil; {
-				next := child.NextSibling
-				label.RemoveChild(child)
-				child = next
-			}
-			setAttr(label, "aria-label", "__mutant_label__")
-		case "required":
-			wasRequired := false
-			visitNode(target, func(n *html.Node) {
-				for _, a := range n.Attr {
-					if a.Key == "required" || a.Key == "aria-required" && a.Val == "true" {
-						wasRequired = true
-					}
-				}
-			})
-			if strings.Contains(nodeText(target), "*") {
-				wasRequired = true
-			}
-			if wasRequired {
-				visitNode(target, func(n *html.Node) {
-					removeAttr(n, "required")
-					removeAttr(n, "aria-required")
-					if n.Type == html.TextNode {
-						n.Data = strings.ReplaceAll(n.Data, "*", "")
-					}
-				})
-			} else {
-				setAttr(target, "aria-required", "true")
-			}
-		case "option":
-			var option *html.Node
-			visitNode(target, func(n *html.Node) {
-				if option == nil && n.Type == html.ElementNode && (n.Data == "option" || n.Data == "label" && strings.Contains(attrNode(n, "class"), "desk-option")) && (strings.TrimSpace(nodeText(n)) == value || strings.HasPrefix(strings.TrimSpace(nodeText(n)), value+"recommended")) {
-					option = n
-				}
-			})
-			if option == nil || option.Parent == nil {
-				return nil, fmt.Errorf("option %q not found", value)
-			}
-			option.Parent.RemoveChild(option)
+		} else {
+			setAttr(target, "aria-required", "true")
 		}
-		var b strings.Builder
-		if err := html.Render(&b, root); err != nil {
-			return nil, err
+	case "option":
+		var option *html.Node
+		visitNode(target, func(n *html.Node) {
+			if option == nil && n.Type == html.ElementNode && (n.Data == "option" || n.Data == "label" && strings.Contains(attrNode(n, "class"), "desk-option")) && (strings.TrimSpace(nodeText(n)) == value || strings.HasPrefix(strings.TrimSpace(nodeText(n)), value+"recommended")) {
+				option = n
+			}
+		})
+		if option == nil || option.Parent == nil {
+			return nil, fmt.Errorf("option %q not found", value)
 		}
-		env.HTML = b.String()
-		return nil, nil
-	}}
+		option.Parent.RemoveChild(option)
+	}
+	var b strings.Builder
+	if err := html.Render(&b, root); err != nil {
+		return nil, err
+	}
+	return []byte(b.String()), nil
 }
 
 func visitNode(n *html.Node, fn func(*html.Node)) {

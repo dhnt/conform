@@ -23,16 +23,20 @@ const usage = `usage: conform <command> [args]
 commands:
   run       execute a CONTRACT.md suite
   cert      certify a candidate against a reference and write sealed evidence
+  mutate    measure contract mutation strength
   version   print the suite version
 `
 
-const runUsage = `usage: conform run CONTRACT.md [--dir D] [--path P] [--shell S] [--timeout 30s] [--json]
+const runUsage = `usage: conform run CONTRACT.md [--dir D] [--path P] [--shell S] [--timeout 30s] [--fresh-home] [--reset-cmd CMD] [--kill-strays] [--json]
 
 flags:
   --dir D        working directory for commands
   --path P       directory or path list prepended to PATH
   --shell S      shell used to run commands (default "sh -c")
   --timeout D    per-step command timeout (default 30s)
+  --fresh-home   use an empty HOME and TMPDIR per run
+  --reset-cmd C  run C before each run
+  --kill-strays  kill the step process group after each step
   --json         emit results as a JSON array
 `
 
@@ -45,6 +49,9 @@ type runOpts struct {
 	shell        string
 	timeout      time.Duration
 	jsonOut      bool
+	freshHome    bool
+	resetCmd     string
+	killStrays   bool
 }
 
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
@@ -59,6 +66,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runContract(args[1:], stdout, stderr)
 	case "cert":
 		return runCert(args[1:], stdout, stderr)
+	case "mutate":
+		return runMutate(args[1:], stdout, stderr)
 	case "version":
 		fmt.Fprintln(stdout, conform.Version)
 		return 0
@@ -99,6 +108,9 @@ func runContract(args []string, stdout, stderr io.Writer) int {
 		PathPrefix: resolvePathList(opts.pathPrefix),
 		Shell:      parseShell(opts.shell),
 		Timeout:    opts.timeout,
+		FreshHome:  opts.freshHome,
+		ResetCmd:   opts.resetCmd,
+		KillStrays: opts.killStrays,
 	}
 
 	results := contract.Run(context.Background(), assertions, env)
@@ -170,7 +182,21 @@ func parseRunArgs(args []string) (runOpts, error) {
 				}
 				opts.jsonOut = b
 			}
-		case "dir", "path", "shell", "timeout":
+		case "fresh-home", "kill-strays":
+			b := true
+			if hasVal {
+				var err error
+				b, err = strconv.ParseBool(val)
+				if err != nil {
+					return opts, fmt.Errorf("invalid value %q for --%s: %w", val, name, err)
+				}
+			}
+			if name == "fresh-home" {
+				opts.freshHome = b
+			} else {
+				opts.killStrays = b
+			}
+		case "dir", "path", "shell", "timeout", "reset-cmd":
 			if !hasVal {
 				if i+1 >= len(args) {
 					return opts, fmt.Errorf("flag --%s requires a value", name)
@@ -185,6 +211,8 @@ func parseRunArgs(args []string) (runOpts, error) {
 				opts.pathPrefix = val
 			case "shell":
 				opts.shell = val
+			case "reset-cmd":
+				opts.resetCmd = val
 			case "timeout":
 				d, err := time.ParseDuration(val)
 				if err != nil {
