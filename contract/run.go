@@ -294,7 +294,13 @@ func runUIAssertion(ctx context.Context, a Assertion, timeout time.Duration, bin
 	}}
 	resp, err := client.Do(req)
 	if err != nil {
-		result.Status, result.Detail = INCONCLUSIVE, fmt.Sprintf("UI GET: %v", err)
+		// The page URL comes from the candidate's own output: a page that is not
+		// served (refused, reset, timed out) is a candidate failure, not a venue one.
+		if ctx.Err() != nil {
+			result.Status, result.Detail = INCONCLUSIVE, fmt.Sprintf("UI GET canceled: %v", ctx.Err())
+			return result
+		}
+		result.Status, result.Detail = FAIL, fmt.Sprintf("UI page not served: %v", err)
 		return result
 	}
 	defer resp.Body.Close()

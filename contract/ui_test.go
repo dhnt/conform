@@ -144,3 +144,18 @@ func TestResetCmdBeforeEachRun(t *testing.T) {
 		}
 	}
 }
+
+func TestUIPageNotServedFails(t *testing.T) {
+	server := httptest.NewServer(http.NotFoundHandler())
+	url := server.URL
+	server.Close() // nothing listens on the advertised port any more
+	md := fmt.Sprintf("### U-01\nInspect.\n```ui\nGET %s/\n{\"fields\":[],\"buttons\":[]}\n```\n", url)
+	assertions, err := contract.Parse(strings.NewReader(md))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := contract.Run(context.Background(), assertions, contract.Env{})
+	if got[0].Status != contract.FAIL || !strings.Contains(got[0].Detail, "not served") {
+		t.Fatalf("result: %+v", got[0])
+	}
+}
