@@ -3,11 +3,13 @@ id: 1c2c70dcf4cb
 kind: feature
 title: A3 contract runner + conform run CLI
 seq: 758
-status: todo
+status: assigned
 priority: p0
 labels:
     - conform
 created: 2026-11-25T21:18:55.529022Z
+weave: 3
+assignee: agy-gemini4-neon
 sprint: 722
 sprint_id: ffc7a05d-4229-598a-8834-4c1212246274
 sprint_title: 'dhnt/conform, then: does the spec reproduce the app?'
