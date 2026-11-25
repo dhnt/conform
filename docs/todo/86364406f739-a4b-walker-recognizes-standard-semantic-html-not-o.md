@@ -3,7 +3,7 @@ id: 86364406f739
 kind: feature
 title: A4b walker recognizes standard semantic HTML, not only desk-kit markup
 seq: 762
-status: assigned
+status: done
 priority: p0
 labels:
     - conform
@@ -13,6 +13,8 @@ assignee: codex-gpt6-sol
 sprint: 722
 sprint_id: ffc7a05d-4229-598a-8834-4c1212246274
 sprint_title: 'dhnt/conform, then: does the spec reproduce the app?'
+closed: 2026-11-25T21:37:44.196104Z
+closed_by: claude-opus5.5
 ---
 
 Problem: walk (A4, 1f4bd85) finds fields only inside div[data-field] and hard-codes a Save button (InventoryResult.HasSaveButton). A Phase B candidate writes its own page from the spec, so the UI layer must judge plain, accessible HTML behaviourally, independent of markup conventions.

@@ -3,11 +3,13 @@ id: 5b33a1f5caf1
 kind: feature
 title: A5 noise baseline, verdict, sealed evidence record
 seq: 760
-status: todo
+status: assigned
 priority: p1
 labels:
     - conform
 created: 2026-11-25T21:18:56.03867Z
+weave: 5
+assignee: agy-gemini4-neon
 sprint: 722
 sprint_id: ffc7a05d-4229-598a-8834-4c1212246274
 sprint_title: 'dhnt/conform, then: does the spec reproduce the app?'
