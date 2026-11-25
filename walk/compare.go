@@ -50,6 +50,11 @@ func CompareWithDefinition(got InventoryResult, definition []Field, wantButtons 
 				return false, fmt.Sprintf("UI gate: field %q options=%q, expected %q", id, f.Options, options)
 			}
 		}
+		if kind == "yes-no" && want.Options == nil && len(f.Options) > 0 && !yesNoOptions(f.Options) {
+			// A yes-no field offering options must offer exactly yes and no; a
+			// single checkbox offers none.
+			return false, fmt.Sprintf("UI gate: field %q options=%q, expected yes and no", id, f.Options)
+		}
 	}
 	return true, "ok"
 }
@@ -64,4 +69,12 @@ func equalOptions(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+func yesNoOptions(options []string) bool {
+	if len(options) != 2 {
+		return false
+	}
+	a, b := strings.ToLower(clean(options[0])), strings.ToLower(clean(options[1]))
+	return a == "yes" && b == "no" || a == "no" && b == "yes"
 }

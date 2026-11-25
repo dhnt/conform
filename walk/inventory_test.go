@@ -127,3 +127,25 @@ func TestParity(t *testing.T) {
 		t.Fatalf("plain fields differ from desk form\ndesk: %#v\nplain: %#v", deskFields, plainFields)
 	}
 }
+
+func TestYesNoFieldNeedsBothOptions(t *testing.T) {
+	def := []Field{{ID: "subscribe", Label: "Subscribe?", Kind: "yes-no", Required: true}}
+	field := func(opts ...string) InventoryResult {
+		return InventoryResult{Fields: []Field{{ID: "subscribe", Label: "Subscribe?", Kind: "yes-no", Required: true, Options: opts}}}
+	}
+	for _, tc := range []struct {
+		opts []string
+		ok   bool
+	}{
+		{nil, true}, // single checkbox
+		{[]string{"Yes", "No"}, true},
+		{[]string{"no", "yes"}, true},
+		{[]string{"yes"}, false},
+		{[]string{"no"}, false},
+		{[]string{"yes", "maybe"}, false},
+	} {
+		if ok, why := CompareWithDefinition(field(tc.opts...), def, nil); ok != tc.ok {
+			t.Errorf("options %q: ok=%t (%s), want %t", tc.opts, ok, why, tc.ok)
+		}
+	}
+}
