@@ -67,7 +67,8 @@ bashy ships conform as `bashy conform`.
 | `contract` | `CONTRACT.md` parser, normalization, runner |
 | `walk` | DOM inventory: Go HTML walk + embedded JS asset, parity-tested |
 | `cert` | noise baseline, mutation harness, verdict, sealed evidence |
-| `cmd/conform` | the CLI |
+| `cli` | the command line (`Run`), shared by `cmd/conform` and `bashy conform` |
+| `cmd/conform` | the standalone binary |
 
 ## License
 

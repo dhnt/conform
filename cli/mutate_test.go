@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ import (
 )
 
 func TestMutateFakeCLIAndPage(t *testing.T) {
-	page, err := os.ReadFile(filepath.Join("..", "..", "contract", "testdata", "fakecli", "page.html"))
+	page, err := os.ReadFile(filepath.Join("..", "contract", "testdata", "fakecli", "page.html"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func TestMutateFakeCLIAndPage(t *testing.T) {
 	}
 	_, bin := fixturePaths(t)
 	var out, errb bytes.Buffer
-	code := run([]string{"mutate", contractFile, "--path", bin, "--dir", t.TempDir(), "--fresh-home", "--json"}, &out, &errb)
+	code := Run([]string{"mutate", contractFile, "--path", bin, "--dir", t.TempDir(), "--fresh-home", "--json"}, &out, &errb)
 	if code != 0 {
 		t.Fatalf("exit %d: %s\n%s", code, out.String(), errb.String())
 	}
@@ -53,7 +53,7 @@ func TestMutateFakeCLIAndPage(t *testing.T) {
 	}
 	out.Reset()
 	errb.Reset()
-	code = run([]string{"mutate", contractFile, "--path", bin, "--dir", t.TempDir(), "--fresh-home"}, &out, &errb)
+	code = Run([]string{"mutate", contractFile, "--path", bin, "--dir", t.TempDir(), "--fresh-home"}, &out, &errb)
 	if code != 0 || !strings.Contains(out.String(), "strength ") || !strings.Contains(out.String(), "KILLED ui") {
 		t.Fatalf("text exit %d: %s\n%s", code, out.String(), errb.String())
 	}
@@ -67,7 +67,7 @@ func TestMutateReportsFailingBaselineNames(t *testing.T) {
 	}
 	_, bin := fixturePaths(t)
 	var out, errb bytes.Buffer
-	code := run([]string{"mutate", contractFile, "--path", bin, "--dir", t.TempDir()}, &out, &errb)
+	code := Run([]string{"mutate", contractFile, "--path", bin, "--dir", t.TempDir()}, &out, &errb)
 	if code != 2 || !strings.Contains(errb.String(), "F-01") {
 		t.Fatalf("exit %d: %s", code, errb.String())
 	}

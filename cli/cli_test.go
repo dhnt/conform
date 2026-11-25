@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"bytes"
@@ -14,8 +14,8 @@ import (
 
 func fixturePaths(t *testing.T) (contractFile, fakeBinDir string) {
 	t.Helper()
-	contractFile = filepath.Join("..", "..", "contract", "testdata", "form-v1", "CONTRACT.md")
-	fakeBinDir = filepath.Join("..", "..", "contract", "testdata", "fakecli", "bin")
+	contractFile = filepath.Join("..", "contract", "testdata", "form-v1", "CONTRACT.md")
+	fakeBinDir = filepath.Join("..", "contract", "testdata", "fakecli", "bin")
 	if _, err := os.Stat(contractFile); err != nil {
 		t.Fatalf("stat contract fixture: %v", err)
 	}
@@ -27,18 +27,18 @@ func fixturePaths(t *testing.T) (contractFile, fakeBinDir string) {
 
 func TestRun(t *testing.T) {
 	var out, errb bytes.Buffer
-	if code := run([]string{"version"}, &out, &errb); code != 0 || strings.TrimSpace(out.String()) != conform.Version {
+	if code := Run([]string{"version"}, &out, &errb); code != 0 || strings.TrimSpace(out.String()) != conform.Version {
 		t.Fatalf("version: code=%d out=%q", code, out.String())
 	}
-	if code := run(nil, &out, &errb); code != 2 {
+	if code := Run(nil, &out, &errb); code != 2 {
 		t.Fatalf("no args: code=%d", code)
 	}
-	if code := run([]string{"nope"}, &out, &errb); code != 2 {
+	if code := Run([]string{"nope"}, &out, &errb); code != 2 {
 		t.Fatalf("unknown: code=%d", code)
 	}
 	out.Reset()
 	errb.Reset()
-	if code := run([]string{"help"}, &out, &errb); code != 0 || !strings.Contains(out.String(), "run") {
+	if code := Run([]string{"help"}, &out, &errb); code != 0 || !strings.Contains(out.String(), "run") {
 		t.Fatalf("help: code=%d out=%q", code, out.String())
 	}
 }
@@ -48,7 +48,7 @@ func TestRunContractTextAndFlagsAfterFile(t *testing.T) {
 	workDir := t.TempDir()
 
 	var out, errb bytes.Buffer
-	code := run([]string{
+	code := Run([]string{
 		"run", contractFile,
 		"--dir", workDir,
 		"--path", fakeBinDir,
@@ -78,7 +78,7 @@ func TestRunContractJSONAndFlagsBeforeFile(t *testing.T) {
 	workDir := t.TempDir()
 
 	var out, errb bytes.Buffer
-	code := run([]string{
+	code := Run([]string{
 		"run",
 		"--dir=" + workDir,
 		"--path=" + fakeBinDir,
@@ -115,7 +115,7 @@ func TestRunContractExit1OnFailAndInconclusive(t *testing.T) {
 			t.Fatal(err)
 		}
 		var out, errb bytes.Buffer
-		code := run([]string{"run", cpath, "--dir", t.TempDir(), "--path", fakeBinDir}, &out, &errb)
+		code := Run([]string{"run", cpath, "--dir", t.TempDir(), "--path", fakeBinDir}, &out, &errb)
 		if code != 1 {
 			t.Fatalf("code=%d want 1; stdout=%q stderr=%q", code, out.String(), errb.String())
 		}
@@ -131,7 +131,7 @@ func TestRunContractExit1OnFailAndInconclusive(t *testing.T) {
 			t.Fatal(err)
 		}
 		var out, errb bytes.Buffer
-		code := run([]string{"run", cpath, "--dir", t.TempDir(), "--path", fakeBinDir, "--timeout", "150ms", "--json"}, &out, &errb)
+		code := Run([]string{"run", cpath, "--dir", t.TempDir(), "--path", fakeBinDir, "--timeout", "150ms", "--json"}, &out, &errb)
 		if code != 1 {
 			t.Fatalf("code=%d want 1; stdout=%q stderr=%q", code, out.String(), errb.String())
 		}
@@ -151,7 +151,7 @@ func TestRunContractExit1OnFailAndInconclusive(t *testing.T) {
 			t.Fatal(err)
 		}
 		var out, errb bytes.Buffer
-		code := run([]string{"run", cpath, "--shell", "/nonexistent/conform-shell"}, &out, &errb)
+		code := Run([]string{"run", cpath, "--shell", "/nonexistent/conform-shell"}, &out, &errb)
 		if code != 1 {
 			t.Fatalf("code=%d want 1; stdout=%q stderr=%q", code, out.String(), errb.String())
 		}
@@ -163,7 +163,7 @@ func TestRunContractExit1OnFailAndInconclusive(t *testing.T) {
 
 func TestRunContractUsageAndErrors(t *testing.T) {
 	var out, errb bytes.Buffer
-	if code := run([]string{"run", "--help"}, &out, &errb); code != 0 || !strings.Contains(out.String(), "--timeout") {
+	if code := Run([]string{"run", "--help"}, &out, &errb); code != 0 || !strings.Contains(out.String(), "--timeout") {
 		t.Fatalf("run --help: code=%d out=%q", code, out.String())
 	}
 
@@ -179,8 +179,8 @@ func TestRunContractUsageAndErrors(t *testing.T) {
 	for _, args := range cases {
 		out.Reset()
 		errb.Reset()
-		if code := run(args, &out, &errb); code != 2 {
-			t.Errorf("run(%v): code=%d, want 2 (stderr=%q)", args, code, errb.String())
+		if code := Run(args, &out, &errb); code != 2 {
+			t.Errorf("Run(%v): code=%d, want 2 (stderr=%q)", args, code, errb.String())
 		}
 	}
 }

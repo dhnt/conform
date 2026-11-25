@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"bytes"
@@ -17,7 +17,7 @@ import (
 )
 
 func TestCertMixedCLiAndUILayers(t *testing.T) {
-	page, err := os.ReadFile(filepath.Join("..", "..", "contract", "testdata", "fakecli", "page.html"))
+	page, err := os.ReadFile(filepath.Join("..", "contract", "testdata", "fakecli", "page.html"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +30,7 @@ func TestCertMixedCLiAndUILayers(t *testing.T) {
 	}
 	_, bin := fixturePaths(t)
 	var out, errb bytes.Buffer
-	code := run([]string{"cert", "--contract", contractFile, "--reference-cmd", filepath.Join(bin, "form"), "--candidate-cmd", filepath.Join(bin, "form"), "--fresh-home"}, &out, &errb)
+	code := Run([]string{"cert", "--contract", contractFile, "--reference-cmd", filepath.Join(bin, "form"), "--candidate-cmd", filepath.Join(bin, "form"), "--fresh-home"}, &out, &errb)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errb.String())
 	}
@@ -49,7 +49,7 @@ func TestCertPassAndSealedEvidence(t *testing.T) {
 	outPath := filepath.Join(t.TempDir(), "nested", "evidence.json")
 
 	var out, errb bytes.Buffer
-	code := run([]string{
+	code := Run([]string{
 		"cert",
 		"--contract", contractFile,
 		"--reference-cmd", fakeForm,
@@ -137,7 +137,7 @@ func TestCertFailingCandidate(t *testing.T) {
 
 	outPath := filepath.Join(tmp, "evidence.json")
 	var out, errb bytes.Buffer
-	code := run([]string{
+	code := Run([]string{
 		"cert",
 		"--contract", contractPath,
 		"--reference-cmd", refBin,
@@ -196,7 +196,7 @@ func TestCertNoisyReferenceDowngradesToInconclusive(t *testing.T) {
 	}
 
 	var out, errb bytes.Buffer
-	code := run([]string{
+	code := Run([]string{
 		"cert",
 		"--contract", contractPath,
 		"--reference-cmd", refBin,
@@ -229,7 +229,7 @@ func TestCertNoisyReferenceDowngradesToInconclusive(t *testing.T) {
 
 func TestCertUsageAndErrors(t *testing.T) {
 	var out, errb bytes.Buffer
-	if code := run([]string{"cert", "--help"}, &out, &errb); code != 0 || !strings.Contains(out.String(), "--reference-cmd") {
+	if code := Run([]string{"cert", "--help"}, &out, &errb); code != 0 || !strings.Contains(out.String(), "--reference-cmd") {
 		t.Fatalf("cert --help: code=%d out=%q", code, out.String())
 	}
 
@@ -244,8 +244,8 @@ func TestCertUsageAndErrors(t *testing.T) {
 	for _, args := range cases {
 		out.Reset()
 		errb.Reset()
-		if code := run(args, &out, &errb); code != 2 {
-			t.Errorf("run(%v): code=%d, want 2 (stderr=%q)", args, code, errb.String())
+		if code := Run(args, &out, &errb); code != 2 {
+			t.Errorf("Run(%v): code=%d, want 2 (stderr=%q)", args, code, errb.String())
 		}
 	}
 }
