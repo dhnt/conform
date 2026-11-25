@@ -3,14 +3,18 @@ id: 2dd1b52178ab
 kind: feature
 title: A7a UI assertions in CONTRACT.md + conform mutate CLI + fresh-HOME isolation
 seq: 763
-status: todo
+status: done
 priority: p0
 labels:
     - conform
 created: 2026-11-25T21:45:29.900775Z
+weave: 7
+assignee: codex-gpt6-sol
 sprint: 722
 sprint_id: ffc7a05d-4229-598a-8834-4c1212246274
 sprint_title: 'dhnt/conform, then: does the spec reproduce the app?'
+closed: 2026-11-25T23:18:48.316852Z
+closed_by: claude-opus5.5
 ---
 
 Needed before the form contract (A7) can be recorded and before Phase B can grade the UI layer.
