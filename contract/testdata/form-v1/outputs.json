@@ -1,0 +1,132 @@
+{
+  "pass_sequence": [
+    {
+      "name": "F-01",
+      "exit": 0,
+      "stdout": "{\"schema_version\":\"bashy-form-v1\",\"id\":\"intake\",\"status\":\"pending\",\"url\":\"http://localhost:43210/?id=intake\",\"inviteURL\":\"http://localhost:43210/?id=intake&invite=tok1\",\"opened\":true,\"openedURL\":\"http://localhost:43210/?id=intake&key=ownerKey123456\",\"ownerKey\":\"ownerKey123456\"}\n",
+      "want_status": "PASS"
+    },
+    {
+      "name": "F-02",
+      "exit": 0,
+      "stdout": "\u001b[32m{\"id\":\"intake\",\"schema_version\":\"bashy-form-v1\",\"status\":\"pending\",\"url\":\"http://localhost:43210/?id=intake\"}\u001b[0m\r\n",
+      "want_status": "PASS"
+    },
+    {
+      "name": "F-03",
+      "exit": 0,
+      "stdout": "{\"schema_version\":\"bashy-hint-v1\",\"kind\":\"hint\",\"tool\":\"form\"}\n{\"id\":\"intake\",\"schema_version\":\"bashy-form-v1\",\"status\":\"answered\"}\n",
+      "want_status": "PASS"
+    },
+    {
+      "name": "F-04",
+      "exit": 0,
+      "stdout": "bashy: hint — see `bashy skill show bashy` for usage\n{\"id\":\"intake\",\"schema_version\":\"bashy-form-v1\",\"status\":\"answered\"}\n",
+      "want_status": "PASS"
+    },
+    {
+      "name": "F-05",
+      "exit": 0,
+      "stdout": "{\"answers\":{\"contact\":\"email\",\"name\":\"Ada\",\"subscribe\":\"yes\"},\"created_at\":\"2026-11-25T10:00:00Z\",\"definition\":[{\"id\":\"name\",\"kind\":\"text\",\"label\":\"Full name\",\"required\":true},{\"help\":\"Two or three sentences.\",\"id\":\"bio\",\"kind\":\"textarea\",\"label\":\"Short bio\"},{\"id\":\"contact\",\"kind\":\"choice\",\"label\":\"Preferred contact\",\"options\":[\"email\",\"phone\",\"post\"],\"recommended\":\"email\",\"required\":true},{\"id\":\"topics\",\"kind\":\"multi\",\"label\":\"Topics\",\"options\":[\"news\",\"events\",\"offers\"],\"recommended\":\"news\"},{\"id\":\"subscribe\",\"kind\":\"yes-no\",\"label\":\"Subscribe?\",\"required\":true},{\"id\":\"avatar\",\"kind\":\"file\",\"label\":\"Avatar file\"}],\"extra_impl_meta\":{\"v\":1},\"id\":\"intake\",\"schema_version\":\"bashy-form-v1\",\"status\":\"answered\",\"title\":\"Contact preferences\",\"url\":\"http://localhost:43210/?id=intake\"}\n",
+      "want_status": "PASS"
+    },
+    {
+      "name": "F-06",
+      "exit": 1,
+      "stdout": "error: Secret fields are refused here (field api_key rejected)\n",
+      "want_status": "PASS"
+    },
+    {
+      "name": "F-07",
+      "exit": 0,
+      "stdout": "{\"id\":\"release-poll\",\"ownerKey\":\"pollOwnerKey9999\",\"schema_version\":\"bashy-form-v1\",\"status\":\"pending\",\"url\":\"http://localhost:43210/?id=release-poll\"}\n",
+      "want_status": "PASS"
+    },
+    {
+      "name": "F-08",
+      "exit": 0,
+      "stdout": "{\"close_at\":\"2099-12-31T23:59:59Z\",\"definition\":[{\"id\":\"vote\",\"kind\":\"choice\",\"label\":\"Ship release?\",\"options\":[\"yes\",\"hold\"],\"required\":true}],\"id\":\"release-poll\",\"respondents\":\"many\",\"schema_version\":\"bashy-form-v1\",\"status\":\"pending\",\"title\":\"Ship release?\",\"url\":\"http://localhost:43210/?id=release-poll\",\"updated_at\":\"2026-11-25T10:00:01Z\"}\n",
+      "want_status": "PASS"
+    },
+    {
+      "name": "F-09",
+      "exit": 0,
+      "stdout": "ID            STATUS    TITLE\nintake        answered  Contact preferences\nrelease-poll  pending   Ship release?\n",
+      "want_status": "PASS"
+    }
+  ],
+  "negative_cases": [
+    {
+      "case": "F-01_extra_field_on_closed_object",
+      "name": "F-01",
+      "bindings": {},
+      "exit": 0,
+      "stdout": "{\"id\":\"intake\",\"inviteURL\":\"x\",\"opened\":true,\"openedURL\":\"y\",\"ownerKey\":\"ownerKey123456\",\"schema_version\":\"bashy-form-v1\",\"status\":\"pending\",\"url\":\"http://localhost:43210/?id=intake\",\"leaked\":\"nope\"}",
+      "want_status": "FAIL"
+    },
+    {
+      "case": "F-02_mismatched_bound_port",
+      "name": "F-02",
+      "bindings": {"ID": "intake", "PORT": "43210"},
+      "exit": 0,
+      "stdout": "{\"id\":\"intake\",\"schema_version\":\"bashy-form-v1\",\"status\":\"pending\",\"url\":\"http://localhost:9999/?id=intake\"}",
+      "want_status": "FAIL"
+    },
+    {
+      "case": "F-02_mismatched_bound_id",
+      "name": "F-02",
+      "bindings": {"ID": "intake", "PORT": "43210"},
+      "exit": 0,
+      "stdout": "{\"id\":\"other\",\"schema_version\":\"bashy-form-v1\",\"status\":\"pending\",\"url\":\"http://localhost:43210/?id=other\"}",
+      "want_status": "FAIL"
+    },
+    {
+      "case": "F-03_invalid_json_output",
+      "name": "F-03",
+      "bindings": {"ID": "intake"},
+      "exit": 0,
+      "stdout": "answered ok",
+      "want_status": "FAIL"
+    },
+    {
+      "case": "F-05_reordered_definition_array",
+      "name": "F-05",
+      "bindings": {"ID": "intake", "PORT": "43210"},
+      "exit": 0,
+      "stdout": "{\"answers\":{\"contact\":\"email\",\"name\":\"Ada\",\"subscribe\":\"yes\"},\"definition\":[{\"help\":\"Two or three sentences.\",\"id\":\"bio\",\"kind\":\"textarea\",\"label\":\"Short bio\"},{\"id\":\"name\",\"kind\":\"text\",\"label\":\"Full name\",\"required\":true},{\"id\":\"contact\",\"kind\":\"choice\",\"label\":\"Preferred contact\",\"options\":[\"email\",\"phone\",\"post\"],\"recommended\":\"email\",\"required\":true},{\"id\":\"topics\",\"kind\":\"multi\",\"label\":\"Topics\",\"options\":[\"news\",\"events\",\"offers\"],\"recommended\":\"news\"},{\"id\":\"subscribe\",\"kind\":\"yes-no\",\"label\":\"Subscribe?\",\"required\":true},{\"id\":\"avatar\",\"kind\":\"file\",\"label\":\"Avatar file\"}],\"id\":\"intake\",\"schema_version\":\"bashy-form-v1\",\"status\":\"answered\",\"title\":\"Contact preferences\",\"url\":\"http://localhost:43210/?id=intake\"}",
+      "want_status": "FAIL"
+    },
+    {
+      "case": "F-06_wrong_exit_zero_instead_of_one",
+      "name": "F-06",
+      "bindings": {},
+      "exit": 0,
+      "stdout": "error: Secret fields are refused here",
+      "want_status": "FAIL"
+    },
+    {
+      "case": "F-06_wrong_error_text",
+      "name": "F-06",
+      "bindings": {},
+      "exit": 1,
+      "stdout": "error: unexpected validation failure",
+      "want_status": "FAIL"
+    },
+    {
+      "case": "F-08_invalid_time_placeholder",
+      "name": "F-08",
+      "bindings": {"PORT": "43210"},
+      "exit": 0,
+      "stdout": "{\"close_at\":\"not-a-timestamp\",\"definition\":[{\"id\":\"vote\",\"kind\":\"choice\",\"label\":\"Ship release?\",\"options\":[\"yes\",\"hold\"],\"required\":true}],\"id\":\"release-poll\",\"respondents\":\"many\",\"schema_version\":\"bashy-form-v1\",\"status\":\"pending\",\"title\":\"Ship release?\",\"url\":\"http://localhost:43210/?id=release-poll\"}",
+      "want_status": "FAIL"
+    },
+    {
+      "case": "F-09_nonzero_exit_on_open_plain_text",
+      "name": "F-09",
+      "bindings": {},
+      "exit": 2,
+      "stdout": "anything",
+      "want_status": "FAIL"
+    }
+  ]
+}
