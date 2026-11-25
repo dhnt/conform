@@ -14,8 +14,11 @@ import (
 
 // dom exposes only the browser primitives used by walker.js. In particular,
 // it does not provide querySelector or form-specific conveniences.
-func dom(n *html.Node) map[string]any {
-	o := map[string]any{"childNodes": []any{}}
+func dom(n *html.Node) map[string]any { id := 0; return domChild(n, nil, &id) }
+
+func domChild(n *html.Node, parent map[string]any, id *int) map[string]any {
+	*id = *id + 1
+	o := map[string]any{"childNodes": []any{}, "parentNode": parent, "walkID": *id}
 	if n.Type == html.ElementNode {
 		o["tagName"] = strings.ToUpper(n.Data)
 		o["getAttribute"] = func(key string) any {
@@ -32,13 +35,15 @@ func dom(n *html.Node) map[string]any {
 	}
 	children := []any{}
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		children = append(children, dom(c))
+		children = append(children, domChild(c, o, id))
 	}
 	o["childNodes"] = children
 	return o
 }
 
 func TestParity(t *testing.T) {
+	var deskFields []Field
+	var plainFields []Field
 	fixtures, err := filepath.Glob("testdata/*.html")
 	if err != nil || len(fixtures) < 2 {
 		t.Fatalf("fixtures: %v, %v", fixtures, err)
@@ -72,7 +77,12 @@ func TestParity(t *testing.T) {
 			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("Go/JS mismatch\nGo: %#v\nJS: %#v", got, want)
 			}
-			if path == "testdata/desk_form.html" {
+			if path == "testdata/desk_form.html" || path == "testdata/plain.html" {
+				if path == "testdata/desk_form.html" {
+					deskFields = got.Fields
+				} else {
+					plainFields = got.Fields
+				}
 				definition := []Field{
 					{ID: "name", Label: "Full name", Kind: "text", Required: true},
 					{ID: "bio", Label: "Short bio", Kind: "textarea"},
@@ -81,21 +91,39 @@ func TestParity(t *testing.T) {
 					{ID: "subscribe", Label: "Subscribe?", Kind: "yes-no", Required: true},
 					{ID: "avatar", Label: "Avatar file", Kind: "file"},
 				}
-				if ok, why := CompareWithDefinition(got, definition); !ok {
+				if ok, why := CompareWithDefinition(got, definition, []string{"Save (partial)", "Submit answers"}); !ok {
 					t.Fatal(why)
 				}
-				got.HasSaveButton = false
-				if ok, _ := CompareWithDefinition(got, definition); ok {
+				got.Buttons = got.Buttons[1:]
+				if ok, _ := CompareWithDefinition(got, definition, []string{"Save (partial)", "Submit answers"}); ok {
 					t.Fatal("missing Save button accepted")
+				}
+			}
+			if path == "testdata/accessibility.html" {
+				want := []Field{
+					{ID: "code", Label: "Code", Kind: "text", Required: true, Options: []string{}},
+					{ID: "description", Label: "Description", Kind: "textarea", Options: []string{}},
+					{ID: "contact", Label: "Contact method", Kind: "yes-no", Required: true, Options: []string{"Yes", "No"}},
+					{ID: "agree", Label: "Agree", Kind: "yes-no", Options: []string{"Agree"}},
+					{ID: "colors", Label: "Colors", Kind: "multi", Options: []string{"Red", "Blue"}},
+				}
+				if !reflect.DeepEqual(got.Fields, want) {
+					t.Fatalf("accessible fields: %#v", got.Fields)
+				}
+				if ok, why := CompareWithDefinition(got, want, []string{"send"}); !ok {
+					t.Fatal(why)
 				}
 			}
 			if path == "testdata/edges.html" {
 				if len(got.Fields) != 6 || got.Fields[0].Label != "External" || !got.Fields[0].Required ||
 					got.Fields[1].Label != "Wrapped" || got.Fields[3].Kind != "yes-no" ||
-					!reflect.DeepEqual(got.Fields[4].Options, []string{"a", "Fallback"}) || got.Fields[5].Kind != "textarea" {
+					!reflect.DeepEqual(got.Fields[4].Options, []string{"A", "Fallback"}) || got.Fields[5].Kind != "textarea" {
 					t.Fatalf("edge inventory: %#v", got)
 				}
 			}
 		})
+	}
+	if !reflect.DeepEqual(deskFields, plainFields) {
+		t.Fatalf("plain fields differ from desk form\ndesk: %#v\nplain: %#v", deskFields, plainFields)
 	}
 }

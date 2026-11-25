@@ -1,0 +1,14 @@
+<!doctype html><html><body><form>
+  <label for="code">Code *</label><input id="code" name="code" aria-label="Not code">
+  <span id="description">Description <em aria-hidden="true">ignored</em></span>
+  <textarea name="description" aria-labelledby="description"></textarea>
+  <fieldset aria-required="true"><legend>Contact method</legend>
+    <label><input type="radio" name="contact" value="y">Yes</label>
+    <label><input type="radio" name="contact" value="n">No</label>
+  </fieldset>
+  <label><input type="checkbox" name="agree" value="1">Agree</label>
+  <label for="colors">Colors</label><select id="colors" name="colors" multiple>
+    <option value="">Choose colors</option><option value="r">Red</option><option value="b">Blue</option>
+  </select>
+  <input type="submit" value="Send">
+</form></body></html>
