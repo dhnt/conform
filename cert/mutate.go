@@ -14,13 +14,6 @@ import (
 	"golang.org/x/net/html"
 )
 
-type Layer string
-
-const (
-	CLI Layer = "CLI"
-	UI  Layer = "UI"
-)
-
 // Environment is the candidate observed by the contract and UI gates. Reset
 // restores candidate state before each run; it is required for stateful CLIs.
 type Environment struct {
@@ -72,7 +65,7 @@ func Mutate(ctx context.Context, assertions []contract.Assertion, env Environmen
 		}
 	}
 	for i, m := range mutants {
-		if m.Name == "" || m.Apply == nil || m.Layer != CLI && m.Layer != UI {
+		if m.Name == "" || m.Apply == nil || m.Layer != LayerCLI && m.Layer != LayerUI {
 			return report, fmt.Errorf("mutant %d: invalid name, layer, or Apply", i)
 		}
 		if err := reset(env); err != nil {
@@ -197,7 +190,7 @@ func commandPattern(command string) (string, string) {
 }
 
 func cliMutant(name, command, pattern, mode, key string) Mutant {
-	return Mutant{Name: name, Layer: CLI, Apply: func(env *Environment) (func(), error) {
+	return Mutant{Name: name, Layer: LayerCLI, Apply: func(env *Environment) (func(), error) {
 		path := env.CLI.PathPrefix
 		if path == "" {
 			path = os.Getenv("PATH")
@@ -251,7 +244,7 @@ exit "$code"
 }
 
 func uiMutant(name, id, mode, value string) Mutant {
-	return Mutant{Name: name, Layer: UI, Apply: func(env *Environment) (func(), error) {
+	return Mutant{Name: name, Layer: LayerUI, Apply: func(env *Environment) (func(), error) {
 		root, err := html.Parse(strings.NewReader(env.HTML))
 		if err != nil {
 			return nil, err

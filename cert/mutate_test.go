@@ -69,7 +69,7 @@ func TestMutateRejectsFailingBaselineAndReportsSurvivor(t *testing.T) {
 		t.Fatal(err)
 	}
 	env := Environment{CLI: contract.Env{PathPrefix: bin}}
-	survivor := Mutant{Name: "noop", Layer: CLI, Apply: func(*Environment) (func(), error) { return nil, nil }}
+	survivor := Mutant{Name: "noop", Layer: LayerCLI, Apply: func(*Environment) (func(), error) { return nil, nil }}
 	report, err := Mutate(context.Background(), a, env, []Mutant{survivor})
 	if err != nil || report.Killed != 0 || report.Total != 1 || report.Strength != 0 {
 		t.Fatalf("survivor report = %+v, %v", report, err)
