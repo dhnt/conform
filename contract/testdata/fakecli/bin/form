@@ -1,0 +1,173 @@
+#!/bin/sh
+# Minimal fake "form" CLI fixture for conform unit tests.
+# Stateful per working directory (or FAKE_STATE_DIR) using plain files.
+set -eu
+
+HOST="${FAKE_HOST:-localhost}"
+PORT="${FAKE_PORT:-43210}"
+KEY="${FAKE_KEY:-ownerKey123456}"
+STATE_DIR="${FAKE_STATE_DIR:-.fake-form-state}"
+
+sub="${1:-}"
+if [ -z "$sub" ]; then
+    printf 'error: missing subcommand\n' >&2
+    exit 2
+fi
+shift
+
+maybe_json_stderr() {
+    if [ -n "${FAKE_JSON_STDERR:-}" ]; then
+        printf 'debug: stderr noise during json command\n' >&2
+    fi
+}
+
+case "$sub" in
+    add)
+        id=""
+        close_at="2099-12-31T23:59:59Z"
+        is_poll=0
+        is_secret=0
+        while [ $# -gt 0 ]; do
+            case "$1" in
+                --id)
+                    id="${2:-}"
+                    shift 2
+                    ;;
+                --close-at)
+                    close_at="${2:-}"
+                    shift 2
+                    ;;
+                --poll)
+                    is_poll=1
+                    shift 2
+                    ;;
+                --definition|--def)
+                    case "${2:-}" in
+                        *api_key*|*password*|*secret*)
+                            is_secret=1
+                            ;;
+                    esac
+                    shift 2
+                    ;;
+                *)
+                    case "$1" in
+                        *bad-secret*|*api_key*)
+                            is_secret=1
+                            ;;
+                    esac
+                    shift
+                    ;;
+            esac
+        done
+        if [ "$is_secret" -eq 1 ] || [ "$id" = "bad-secret" ]; then
+            printf 'error: Secret fields are refused here (api_key)\n' >&2
+            exit 1
+        fi
+        if [ -n "${FAKE_FORCE_ID:-}" ]; then
+            id="$FAKE_FORCE_ID"
+        fi
+        if [ -z "$id" ]; then
+            id="form1"
+        fi
+        mkdir -p "$STATE_DIR"
+        printf 'pending\n' > "$STATE_DIR/$id.status"
+        printf '%s\n' "$close_at" > "$STATE_DIR/$id.close_at"
+        maybe_json_stderr
+        if [ "$is_poll" -eq 1 ]; then
+            printf '{"id":"%s","ownerKey":"%s","schema_version":"bashy-form-v1","status":"pending","url":"http://%s:%s/?id=%s"}\n' \
+                "$id" "$KEY" "$HOST" "$PORT" "$id"
+        else
+            printf '{"id":"%s","inviteURL":"http://%s:%s/?id=%s&invite=1","opened":true,"openedURL":"http://%s:%s/?id=%s","ownerKey":"%s","schema_version":"bashy-form-v1","status":"pending","url":"http://%s:%s/?id=%s"}\n' \
+                "$id" "$HOST" "$PORT" "$id" "$HOST" "$PORT" "$id" "$KEY" "$HOST" "$PORT" "$id"
+        fi
+        ;;
+
+    open)
+        id="${1:-}"
+        if [ -z "$id" ] || [ ! -f "$STATE_DIR/$id.status" ]; then
+            printf 'error: form %s not found\n' "$id" >&2
+            exit 1
+        fi
+        status=$(cat "$STATE_DIR/$id.status")
+        maybe_json_stderr
+        printf '{"id":"%s","schema_version":"bashy-form-v1","status":"%s","url":"http://%s:%s/?id=%s"}\n' \
+            "$id" "$status" "$HOST" "$PORT" "$id"
+        ;;
+
+    answer)
+        id="${1:-}"
+        if [ -z "$id" ] || [ ! -f "$STATE_DIR/$id.status" ]; then
+            printf 'error: form %s not found\n' "$id" >&2
+            exit 1
+        fi
+        printf 'answered\n' > "$STATE_DIR/$id.status"
+        maybe_json_stderr
+        printf '{"id":"%s","schema_version":"bashy-form-v1","status":"answered"}\n' "$id"
+        ;;
+
+    wait)
+        id="${1:-}"
+        if [ -z "$id" ] || [ ! -f "$STATE_DIR/$id.status" ]; then
+            printf 'error: form %s not found\n' "$id" >&2
+            exit 1
+        fi
+        status=$(cat "$STATE_DIR/$id.status")
+        maybe_json_stderr
+        printf '{"id":"%s","schema_version":"bashy-form-v1","status":"%s"}\n' "$id" "$status"
+        ;;
+
+    show)
+        id="${1:-}"
+        if [ -z "$id" ] || [ ! -f "$STATE_DIR/$id.status" ]; then
+            printf 'error: form %s not found\n' "$id" >&2
+            exit 1
+        fi
+        status=$(cat "$STATE_DIR/$id.status")
+        maybe_json_stderr
+        if [ "$id" = "release-poll" ]; then
+            close_at=$(cat "$STATE_DIR/$id.close_at")
+            printf '{"close_at":"%s","definition":[{"id":"vote","kind":"choice","label":"Ship release?","options":["yes","hold"],"required":true}],"id":"release-poll","respondents":"many","schema_version":"bashy-form-v1","status":"%s","title":"Ship release?","url":"http://%s:%s/?id=release-poll","extra":"ok"}\n' \
+                "$close_at" "$status" "$HOST" "$PORT"
+        else
+            printf '{"answers":{"contact":"email","name":"Ada","subscribe":"yes"},"definition":[{"id":"name","kind":"text","label":"Full name","required":true},{"help":"Two or three sentences.","id":"bio","kind":"textarea","label":"Short bio"},{"id":"contact","kind":"choice","label":"Preferred contact","options":["email","phone","post"],"recommended":"email","required":true},{"id":"topics","kind":"multi","label":"Topics","options":["news","events","offers"],"recommended":"news"},{"id":"subscribe","kind":"yes-no","label":"Subscribe?","required":true},{"id":"avatar","kind":"file","label":"Avatar file"}],"id":"%s","schema_version":"bashy-form-v1","status":"%s","title":"Contact preferences","url":"http://%s:%s/?id=%s","extra":"ok"}\n' \
+                "$id" "$status" "$HOST" "$PORT" "$id"
+        fi
+        ;;
+
+    list)
+        printf 'ID\tSTATUS\n'
+        if [ -d "$STATE_DIR" ]; then
+            for f in "$STATE_DIR"/*.status; do
+                [ -e "$f" ] || continue
+                name=$(basename "$f" .status)
+                st=$(cat "$f")
+                printf '%s\t%s\n' "$name" "$st"
+            done
+        fi
+        ;;
+
+    sleep)
+        dur="${1:-5}"
+        sleep "$dur"
+        printf 'awake\n'
+        ;;
+
+    env)
+        var="${1:-}"
+        eval "printf '%s\\n' \"\${$var:-}\""
+        ;;
+
+    pwd)
+        pwd -P
+        ;;
+
+    both)
+        printf 'stdout-line\n'
+        printf 'stderr-line\n' >&2
+        ;;
+
+    *)
+        printf 'error: unknown subcommand %s\n' "$sub" >&2
+        exit 2
+        ;;
+esac

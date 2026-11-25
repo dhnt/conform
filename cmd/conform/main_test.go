@@ -2,11 +2,28 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/dhnt/conform"
+	"github.com/dhnt/conform/contract"
 )
+
+func fixturePaths(t *testing.T) (contractFile, fakeBinDir string) {
+	t.Helper()
+	contractFile = filepath.Join("..", "..", "contract", "testdata", "form-v1", "CONTRACT.md")
+	fakeBinDir = filepath.Join("..", "..", "contract", "testdata", "fakecli", "bin")
+	if _, err := os.Stat(contractFile); err != nil {
+		t.Fatalf("stat contract fixture: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(fakeBinDir, "form")); err != nil {
+		t.Fatalf("stat fakecli fixture: %v", err)
+	}
+	return contractFile, fakeBinDir
+}
 
 func TestRun(t *testing.T) {
 	var out, errb bytes.Buffer
@@ -18,5 +35,149 @@ func TestRun(t *testing.T) {
 	}
 	if code := run([]string{"nope"}, &out, &errb); code != 2 {
 		t.Fatalf("unknown: code=%d", code)
+	}
+	out.Reset()
+	errb.Reset()
+	if code := run([]string{"help"}, &out, &errb); code != 0 || !strings.Contains(out.String(), "run") {
+		t.Fatalf("help: code=%d out=%q", code, out.String())
+	}
+}
+
+func TestRunContractTextAndFlagsAfterFile(t *testing.T) {
+	contractFile, fakeBinDir := fixturePaths(t)
+	workDir := t.TempDir()
+
+	var out, errb bytes.Buffer
+	code := run([]string{
+		"run", contractFile,
+		"--dir", workDir,
+		"--path", fakeBinDir,
+		"--shell", "/bin/sh -c",
+		"--timeout", "10s",
+	}, &out, &errb)
+	if code != 0 {
+		t.Fatalf("code=%d want 0\nstdout:\n%s\nstderr:\n%s", code, out.String(), errb.String())
+	}
+
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 9 {
+		t.Fatalf("got %d lines, want 9:\n%s", len(lines), out.String())
+	}
+	for i, line := range lines {
+		if !strings.HasPrefix(line, "PASS F-0") {
+			t.Errorf("line[%d] = %q, want PASS F-0*", i, line)
+		}
+	}
+}
+
+func TestRunContractJSONAndFlagsBeforeFile(t *testing.T) {
+	contractFile, fakeBinDir := fixturePaths(t)
+	workDir := t.TempDir()
+
+	var out, errb bytes.Buffer
+	code := run([]string{
+		"run",
+		"--dir=" + workDir,
+		"--path=" + fakeBinDir,
+		"--timeout=10s",
+		"--json",
+		contractFile,
+	}, &out, &errb)
+	if code != 0 {
+		t.Fatalf("code=%d want 0\nstdout:\n%s\nstderr:\n%s", code, out.String(), errb.String())
+	}
+
+	var results []contract.Result
+	if err := json.Unmarshal(out.Bytes(), &results); err != nil {
+		t.Fatalf("unmarshal json output: %v\nraw:\n%s", err, out.String())
+	}
+	if len(results) != 9 {
+		t.Fatalf("got %d results, want 9", len(results))
+	}
+	for _, r := range results {
+		if r.Status != contract.PASS {
+			t.Errorf("%s: got %s (%s), want PASS", r.Name, r.Status, r.Detail)
+		}
+	}
+}
+
+func TestRunContractExit1OnFailAndInconclusive(t *testing.T) {
+	_, fakeBinDir := fixturePaths(t)
+	tmp := t.TempDir()
+
+	t.Run("fail_exits_1", func(t *testing.T) {
+		md := "### X-01\nMismatch.\n```console\n$ form list\nexpected-something-else\n```\nexit: 0\n"
+		cpath := filepath.Join(tmp, "fail.md")
+		if err := os.WriteFile(cpath, []byte(md), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		var out, errb bytes.Buffer
+		code := run([]string{"run", cpath, "--dir", t.TempDir(), "--path", fakeBinDir}, &out, &errb)
+		if code != 1 {
+			t.Fatalf("code=%d want 1; stdout=%q stderr=%q", code, out.String(), errb.String())
+		}
+		if !strings.HasPrefix(out.String(), "FAIL X-01 ") {
+			t.Errorf("stdout = %q, want prefix 'FAIL X-01 '", out.String())
+		}
+	})
+
+	t.Run("timeout_inconclusive_exits_1", func(t *testing.T) {
+		md := "### T-01\nSleeps.\n```console\n$ form sleep 10\nawake\n```\nexit: 0\n"
+		cpath := filepath.Join(tmp, "timeout.md")
+		if err := os.WriteFile(cpath, []byte(md), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		var out, errb bytes.Buffer
+		code := run([]string{"run", cpath, "--dir", t.TempDir(), "--path", fakeBinDir, "--timeout", "150ms", "--json"}, &out, &errb)
+		if code != 1 {
+			t.Fatalf("code=%d want 1; stdout=%q stderr=%q", code, out.String(), errb.String())
+		}
+		var results []contract.Result
+		if err := json.Unmarshal(out.Bytes(), &results); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(results) != 1 || results[0].Status != contract.INCONCLUSIVE {
+			t.Errorf("results = %+v, want single INCONCLUSIVE", results)
+		}
+	})
+
+	t.Run("bad_shell_inconclusive_exits_1", func(t *testing.T) {
+		md := "### S-01\nEcho.\n```console\n$ echo ok\nok\n```\nexit: 0\n"
+		cpath := filepath.Join(tmp, "shell.md")
+		if err := os.WriteFile(cpath, []byte(md), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		var out, errb bytes.Buffer
+		code := run([]string{"run", cpath, "--shell", "/nonexistent/conform-shell"}, &out, &errb)
+		if code != 1 {
+			t.Fatalf("code=%d want 1; stdout=%q stderr=%q", code, out.String(), errb.String())
+		}
+		if !strings.HasPrefix(out.String(), "INCONCLUSIVE S-01 ") {
+			t.Errorf("stdout = %q, want prefix 'INCONCLUSIVE S-01 '", out.String())
+		}
+	})
+}
+
+func TestRunContractUsageAndErrors(t *testing.T) {
+	var out, errb bytes.Buffer
+	if code := run([]string{"run", "--help"}, &out, &errb); code != 0 || !strings.Contains(out.String(), "--timeout") {
+		t.Fatalf("run --help: code=%d out=%q", code, out.String())
+	}
+
+	cases := [][]string{
+		{"run"},
+		{"run", "a.md", "b.md"},
+		{"run", "a.md", "--unknown"},
+		{"run", "a.md", "--timeout", "notaduration"},
+		{"run", "a.md", "--timeout", "0s"},
+		{"run", "a.md", "--dir"},
+		{"run", filepath.Join(t.TempDir(), "missing.md")},
+	}
+	for _, args := range cases {
+		out.Reset()
+		errb.Reset()
+		if code := run(args, &out, &errb); code != 2 {
+			t.Errorf("run(%v): code=%d, want 2 (stderr=%q)", args, code, errb.String())
+		}
 	}
 }
