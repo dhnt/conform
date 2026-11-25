@@ -3,7 +3,7 @@ id: 5b33a1f5caf1
 kind: feature
 title: A5 noise baseline, verdict, sealed evidence record
 seq: 760
-status: assigned
+status: done
 priority: p1
 labels:
     - conform
@@ -13,6 +13,8 @@ assignee: agy-gemini4-neon
 sprint: 722
 sprint_id: ffc7a05d-4229-598a-8834-4c1212246274
 sprint_title: 'dhnt/conform, then: does the spec reproduce the app?'
+closed: 2026-11-25T21:44:26.43252Z
+closed_by: claude-opus5.5
 ---
 
 Depends on A3. Package cert: Baseline(runs [][]contract.Result) marks assertions that disagree reference-vs-reference as noisy (port compute_noise_baseline/grade_candidate_against_baseline/combine_verdicts, grader_lib.py ~1433-1530); Verdict per layer (cli, ui) combined with AND (any FAIL -> FAIL; any INCONCLUSIVE -> INCONCLUSIVE; else PASS); Evidence record JSON: conform version, contract sha256, candidate identity (caller-supplied digest), reference identity, environment summary, each result with fresh|reused, timestamp; Seal = sha256 over canonical JSON, Verify(record) bool. CLI: `conform cert --contract C --reference-cmd ... --candidate-cmd ... --runs N --out evidence.json` may be minimal. Acceptance: unit tests for noise marking, AND verdict, seal tamper detection.
