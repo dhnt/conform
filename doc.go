@@ -18,4 +18,4 @@
 package conform
 
 // Version is the conform suite version recorded in every evidence record.
-const Version = "0.1.0"
+const Version = "0.1.1"
