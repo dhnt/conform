@@ -3,14 +3,18 @@ id: 2488905466b7
 kind: feature
 title: 'S7 conform spec check: static soundness checks for a shapeware spec folder'
 seq: 765
-status: todo
+status: done
 priority: p0
 labels:
     - conform
 created: 2026-11-26T09:21:19.79687Z
+weave: 8
+assignee: agy-gemini4-carbon
 sprint: 723
 sprint_id: a7f3f8dd-c83a-5191-9739-676397a50c45
 sprint_title: 'Spec to source calibration: sound spec, validator, minimal model, judge band'
+closed: 2026-11-26T09:43:22.269554Z
+closed_by: claude-opus5.5
 ---
 
 Implements umbrella Sprint 723 story d379a8098c56 (S7, static part only). Add `conform spec check DIR [--json]`.
