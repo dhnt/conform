@@ -3,14 +3,18 @@ id: cbbb535b5818
 kind: feature
 title: 'T1a conform spec check: lifecycle rules (dag.md has the five steps, each with effects and a band)'
 seq: 767
-status: todo
+status: done
 priority: p0
 labels:
     - conform
 created: 2026-11-26T13:07:44.632319Z
+weave: 10
+assignee: codex-gpt6.2-astra
 sprint: 731
 sprint_id: 88c254ad-f4a4-5c54-a0fd-ac469894c684
 sprint_title: 'The full shaping trip on form: spec to source to artifact to install to run and serve, with the band needed at each stage'
+closed: 2026-11-26T13:12:24.863095Z
+closed_by: claude-opus5.5
 ---
 
 Part of umbrella Sprint 731 story a9e27a3da490 (operator ruling 2026-11-26: the lifecycle is part of the spec). Format: umbrella docs/shapeware-spec-v0.md section 5a. Example of a real lifecycle file: bashy examples/desk/form/dag.md (frontmatter, `## Tasks`, one `### <step>` per target, a one-line purpose, an `Effects:` line, then a fenced code block).
