@@ -17,6 +17,7 @@ func TestCheckFormSpecV1(t *testing.T) {
 		{"closed-undeclared", "CONTRACT.md"},
 		{"example-unreferenced", "examples/contact.yaml"},
 		{"flag-undefined", "--fields"},
+		{"lifecycle-missing", "dag.md"},
 	}
 	if len(findings) != len(want) {
 		t.Fatalf("got %d findings, want %d: %+v", len(findings), len(want), findings)
@@ -49,7 +50,7 @@ func TestCheckFormSpecV2(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Check(form-spec-v2): %v", err)
 	}
-	if len(findings) != 1 || findings[0].Rule != "rule-by-example" || findings[0].Subject != "CONTRACT.md:24" {
+	if len(findings) != 2 || findings[0].Rule != "lifecycle-missing" || findings[1].Rule != "rule-by-example" || findings[1].Subject != "CONTRACT.md:24" {
 		t.Fatalf("got %+v, want rule-by-example on the secret-name rule", findings)
 	}
 }
@@ -59,14 +60,21 @@ func TestCheckFormSpecV3(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(findings) != 0 {
-		t.Fatalf("got findings %+v, want none", findings)
+	if len(findings) != 1 || findings[0].Rule != "lifecycle-missing" || findings[0].Subject != "dag.md" || findings[0].Severity != "warning" {
+		t.Fatalf("got %+v, want one lifecycle-missing warning for dag.md", findings)
 	}
 }
 
 func writeSpecDir(t *testing.T, contractMD, featuresYAML string, examples map[string]string) string {
 	t.Helper()
 	dir := t.TempDir()
+	dag, err := os.ReadFile(filepath.Join("testdata", "form-spec-v4", "dag.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "dag.md"), dag, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(dir, "CONTRACT.md"), []byte(contractMD), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -328,9 +336,31 @@ func TestRuleByExample(t *testing.T) {
 				}
 				return
 			}
-			want := Finding{"rule-by-example", "CONTRACT.md:13", fmt.Sprintf("%q: define the set (the decision rule) and give boundary examples", tc.match)}
+			want := Finding{Severity: "error", Rule: "rule-by-example", Subject: "CONTRACT.md:13", Message: fmt.Sprintf("%q: define the set (the decision rule) and give boundary examples", tc.match)}
 			if len(findings) != 1 || findings[0] != want {
 				t.Fatalf("got %+v, want %+v", findings, want)
+			}
+		})
+	}
+}
+
+func TestLifecycleRules(t *testing.T) {
+	for _, tc := range []struct{ name, heading, metadata, rule, subject, message string }{
+		{"missing step", "### demo", "Effects: read\nBand: L1 reviewed", "lifecycle-step-missing", "run", ""},
+		{"missing effects", "### run", "Band: none", "lifecycle-effects-missing", "run", ""},
+		{"missing band", "### run", "Effects: read", "lifecycle-band-missing", "run", ""},
+		{"invalid band", "### run", "Effects: read\nBand: L6 guess", "lifecycle-band-missing", "run", "L6 guess"},
+		{"extra step", "### run\nEffects: read\nBand: L5 reviewed\n### show", "Effects: read\nBand: none extra", "lifecycle-band-missing", "show", "none extra"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dag := "## Tasks\n"
+			for _, step := range []string{"source", "build", "test", "install"} {
+				dag += "### " + step + "\nEffects: read\nBand: unmeasured\n~~~sh\ntrue\n~~~\n"
+			}
+			dag += tc.heading + "\n" + tc.metadata + "\n~~~~sh\n~~~\n### run\nEffects: read\nBand: L2\n~~~~\nBand: L4\nEffects: read\n## Notes\n### run\n"
+			got := checkLifecycle(dag)
+			if len(got) != 1 || got[0].Rule != tc.rule || got[0].Subject != tc.subject || got[0].Severity != "error" || !strings.Contains(got[0].Message, tc.message) {
+				t.Fatalf("got %+v, want %s %s with message containing %q", got, tc.rule, tc.subject, tc.message)
 			}
 		})
 	}

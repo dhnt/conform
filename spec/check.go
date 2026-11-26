@@ -1,5 +1,5 @@
 // Package spec runs static soundness checks over a shapeware spec folder
-// (CONTRACT.md, features.yaml, examples/) without executing any commands.
+// (CONTRACT.md, features.yaml, dag.md, examples/) without executing any commands.
 package spec
 
 import (
@@ -20,9 +20,10 @@ import (
 
 // Finding is a single static soundness violation in a spec folder.
 type Finding struct {
-	Rule    string `json:"rule"`
-	Subject string `json:"subject"`
-	Message string `json:"message"`
+	Rule     string `json:"rule"`
+	Subject  string `json:"subject"`
+	Message  string `json:"message"`
+	Severity string `json:"severity"`
 }
 
 var (
@@ -42,7 +43,7 @@ var (
 )
 
 // Check statically validates the spec folder at dir (CONTRACT.md, features.yaml,
-// and examples/) and returns findings sorted by Rule then Subject.
+// dag.md, and examples/) and returns findings sorted by Rule then Subject.
 func Check(dir string) ([]Finding, error) {
 	if dir == "" {
 		return nil, errors.New("empty spec directory")
@@ -81,9 +82,10 @@ func Check(dir string) ([]Finding, error) {
 				msg = fmt.Sprintf("status %q has no acceptance items", f.status)
 			}
 			findings = append(findings, Finding{
-				Rule:    "feature-no-acceptance",
-				Subject: f.id,
-				Message: msg,
+				Severity: "error",
+				Rule:     "feature-no-acceptance",
+				Subject:  f.id,
+				Message:  msg,
 			})
 		}
 	}
@@ -92,9 +94,10 @@ func Check(dir string) ([]Finding, error) {
 	for _, rel := range examples {
 		if !assertionsMentionPath(assertions, rel) {
 			findings = append(findings, Finding{
-				Rule:    "example-unreferenced",
-				Subject: rel,
-				Message: "not referenced in any assertion command of CONTRACT.md",
+				Severity: "error",
+				Rule:     "example-unreferenced",
+				Subject:  rel,
+				Message:  "not referenced in any assertion command of CONTRACT.md",
 			})
 		}
 	}
@@ -112,9 +115,10 @@ func Check(dir string) ([]Finding, error) {
 			}
 			sort.Strings(verbs)
 			findings = append(findings, Finding{
-				Rule:    "flag-undefined",
-				Subject: flag,
-				Message: fmt.Sprintf("used across %d verbs (%s) without mention in CONTRACT.md rules", len(verbs), strings.Join(verbs, ", ")),
+				Severity: "error",
+				Rule:     "flag-undefined",
+				Subject:  flag,
+				Message:  fmt.Sprintf("used across %d verbs (%s) without mention in CONTRACT.md rules", len(verbs), strings.Join(verbs, ", ")),
 			})
 		}
 	}
@@ -132,9 +136,10 @@ func Check(dir string) ([]Finding, error) {
 		}
 		if len(closedNames) > 0 {
 			findings = append(findings, Finding{
-				Rule:    "closed-undeclared",
-				Subject: "CONTRACT.md",
-				Message: fmt.Sprintf("rules text never mentions closed objects; closed expected outputs in %s", strings.Join(closedNames, ", ")),
+				Severity: "error",
+				Rule:     "closed-undeclared",
+				Subject:  "CONTRACT.md",
+				Message:  fmt.Sprintf("rules text never mentions closed objects; closed expected outputs in %s", strings.Join(closedNames, ", ")),
 			})
 		}
 	}
@@ -185,12 +190,23 @@ func Check(dir string) ([]Finding, error) {
 
 			if !varies && hasConst && len(missing) > 0 && present*10 >= 9*total {
 				findings = append(findings, Finding{
-					Rule:    "envelope-key-missing",
-					Subject: k,
-					Message: fmt.Sprintf("carries %q in %d/%d JSON object outputs; missing from %s", constVal, present, total, strings.Join(missing, ", ")),
+					Severity: "error",
+					Rule:     "envelope-key-missing",
+					Subject:  k,
+					Message:  fmt.Sprintf("carries %q in %d/%d JSON object outputs; missing from %s", constVal, present, total, strings.Join(missing, ", ")),
 				})
 			}
 		}
+	}
+
+	dag, err := os.ReadFile(filepath.Join(dir, "dag.md"))
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		findings = append(findings, Finding{Rule: "lifecycle-missing", Subject: "dag.md", Message: "spec has no lifecycle file", Severity: "warning"})
+	case err != nil:
+		return nil, err
+	default:
+		findings = append(findings, checkLifecycle(string(dag))...)
 	}
 
 	sort.Slice(findings, func(i, j int) bool {
@@ -342,21 +358,13 @@ func checkRulesText(src string) (string, []Finding) {
 
 	var out []string
 	inAssertion := false
-	var fence string
+	var fence markdownFence
 	findings := []Finding{}
 
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		inFence := fence != ""
-		if inFence {
-			if strings.HasPrefix(trimmed, fence) && strings.Trim(trimmed, fence[:1]) == "" {
-				fence = ""
-			}
-		} else if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
-			n := len(trimmed) - len(strings.TrimLeft(trimmed, trimmed[:1]))
-			fence = trimmed[:n]
-			inFence = true
-		} else if anyHeadingRe.MatchString(trimmed) {
+		inFence := fence.consume(trimmed)
+		if !inFence && anyHeadingRe.MatchString(trimmed) {
 			inAssertion = assertionHeadingRe.MatchString(trimmed)
 		}
 
@@ -377,9 +385,10 @@ func checkRulesText(src string) (string, []Finding) {
 		})
 		if match := ruleByExampleRe.FindString(prose); match != "" {
 			findings = append(findings, Finding{
-				Rule:    "rule-by-example",
-				Subject: fmt.Sprintf("CONTRACT.md:%d", i+1),
-				Message: fmt.Sprintf("%q: define the set (the decision rule) and give boundary examples", match),
+				Severity: "error",
+				Rule:     "rule-by-example",
+				Subject:  fmt.Sprintf("CONTRACT.md:%d", i+1),
+				Message:  fmt.Sprintf("%q: define the set (the decision rule) and give boundary examples", match),
 			})
 		}
 	}

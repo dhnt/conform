@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -60,15 +59,6 @@ func runSpecCheck(args []string, stdout, stderr io.Writer) int {
 	if findings == nil {
 		findings = []spec.Finding{}
 	}
-	sort.Slice(findings, func(i, j int) bool {
-		if findings[i].Rule != findings[j].Rule {
-			return findings[i].Rule < findings[j].Rule
-		}
-		if findings[i].Subject != findings[j].Subject {
-			return findings[i].Subject < findings[j].Subject
-		}
-		return findings[i].Message < findings[j].Message
-	})
 
 	if jsonOut {
 		enc := json.NewEncoder(stdout)
@@ -80,12 +70,17 @@ func runSpecCheck(args []string, stdout, stderr io.Writer) int {
 		}
 	} else {
 		for _, f := range findings {
+			if f.Severity == "warning" {
+				fmt.Fprint(stdout, "warning: ")
+			}
 			fmt.Fprintf(stdout, "%s %s: %s\n", f.Rule, f.Subject, singleLine(f.Message))
 		}
 	}
 
-	if len(findings) > 0 {
-		return 1
+	for _, f := range findings {
+		if f.Severity == "error" {
+			return 1
+		}
 	}
 	return 0
 }

@@ -221,8 +221,14 @@ func TestRunSpecAdvisory(t *testing.T) {
 			write("features.yaml", "- id: names\n  status: tbd\n")
 			write("other.md", md)
 			run("other.md", "")
-			run("CONTRACT.md", "conform: note: spec check reports 1 finding(s) for this spec (run \"conform spec check "+dir+"\"); where a rule is underspecified, do not guess silently\n")
+			run("CONTRACT.md", "conform: note: spec check reports 2 finding(s) for this spec (run \"conform spec check "+dir+"\"); where a rule is underspecified, do not guess silently\n")
 			write("CONTRACT.md", strings.Replace(md, "Names, etc.", "Names are ASCII letters.", 1))
+			run("CONTRACT.md", "conform: note: spec check reports 1 finding(s) for this spec (run \"conform spec check "+dir+"\"); where a rule is underspecified, do not guess silently\n")
+			dag, err := os.ReadFile(filepath.Join("..", "spec", "testdata", "form-spec-v4", "dag.md"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			write("dag.md", string(dag))
 			run("CONTRACT.md", "")
 		}
 	}

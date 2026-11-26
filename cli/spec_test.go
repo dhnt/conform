@@ -12,11 +12,20 @@ import (
 
 func TestSpecCheckCleanAndFindings(t *testing.T) {
 	v1Dir := filepath.Join("..", "spec", "testdata", "form-spec-v1")
-	v3Dir := filepath.Join("..", "spec", "testdata", "form-spec-v3")
+	v4Dir := filepath.Join("..", "spec", "testdata", "form-spec-v4")
 
-	t.Run("v3_clean_text", func(t *testing.T) {
+	t.Run("v3_warning_only", func(t *testing.T) {
 		var out, errb bytes.Buffer
-		code := Run([]string{"spec", "check", v3Dir}, &out, &errb)
+		dir := filepath.Join("..", "spec", "testdata", "form-spec-v3")
+		code := Run([]string{"spec", "check", dir}, &out, &errb)
+		if code != 0 || !strings.HasPrefix(out.String(), "warning: lifecycle-missing dag.md: ") {
+			t.Fatalf("code=%d stdout=%q stderr=%q", code, out.String(), errb.String())
+		}
+	})
+
+	t.Run("v4_clean_text", func(t *testing.T) {
+		var out, errb bytes.Buffer
+		code := Run([]string{"spec", "check", v4Dir}, &out, &errb)
 		if code != 0 {
 			t.Fatalf("code=%d want 0; stdout=%q stderr=%q", code, out.String(), errb.String())
 		}
@@ -25,9 +34,9 @@ func TestSpecCheckCleanAndFindings(t *testing.T) {
 		}
 	})
 
-	t.Run("v3_clean_json", func(t *testing.T) {
+	t.Run("v4_clean_json", func(t *testing.T) {
 		var out, errb bytes.Buffer
-		code := Run([]string{"spec", "check", v3Dir, "--json"}, &out, &errb)
+		code := Run([]string{"spec", "check", v4Dir, "--json"}, &out, &errb)
 		if code != 0 {
 			t.Fatalf("code=%d want 0; stdout=%q stderr=%q", code, out.String(), errb.String())
 		}
@@ -54,6 +63,7 @@ func TestSpecCheckCleanAndFindings(t *testing.T) {
 			"closed-undeclared CONTRACT.md: ",
 			"example-unreferenced examples/contact.yaml: ",
 			"flag-undefined --fields: ",
+			"warning: lifecycle-missing dag.md: ",
 		}
 		if len(lines) != len(wantPrefixes) {
 			t.Fatalf("got %d lines, want %d:\n%s", len(lines), len(wantPrefixes), out.String())
@@ -75,8 +85,13 @@ func TestSpecCheckCleanAndFindings(t *testing.T) {
 		if err := json.Unmarshal(out.Bytes(), &findings); err != nil {
 			t.Fatalf("unmarshal: %v\nraw:\n%s", err, out.String())
 		}
-		if len(findings) != 3 {
-			t.Fatalf("got %d findings, want 3: %+v", len(findings), findings)
+		if len(findings) != 4 {
+			t.Fatalf("got %d findings, want 4: %+v", len(findings), findings)
+		}
+		for i, want := range []string{"error", "error", "error", "warning"} {
+			if findings[i].Severity != want {
+				t.Errorf("finding[%d] severity = %q, want %q", i, findings[i].Severity, want)
+			}
 		}
 		if findings[0].Rule != "closed-undeclared" || findings[1].Rule != "example-unreferenced" || findings[2].Rule != "flag-undefined" {
 			t.Errorf("unexpected order: %+v", findings)

@@ -54,8 +54,10 @@ and UI mutants and reports the killed fraction. Add `--json` for a
 ## Spec check
 
 `conform spec check DIR [--json]` statically checks a spec folder (`CONTRACT.md`,
-`features.yaml`, `examples/`) without running any commands. It exits 0 when
-clean, 1 when findings are reported, and 2 on usage or unreadable input.
+`features.yaml`, `examples/`, and `dag.md`) without running commands. It exits 0
+for a clean check or warnings alone, 1 for any error finding, and 2 for usage or
+unreadable input. Text output prefixes warnings with `warning:`. JSON findings
+include a `severity` of `error` or `warning`.
 
 - `feature-no-acceptance`: a feature in `features.yaml` whose status is not `tbd` has no acceptance item.
 - `example-unreferenced`: a file under `examples/` never appears in an assertion command of `CONTRACT.md`.
@@ -63,8 +65,12 @@ clean, 1 when findings are reported, and 2 on usage or unreadable input.
 - `closed-undeclared`: the `CONTRACT.md` rules text never contains the word `closed` while at least one JSON object expected output lacks `"...":"..."`.
 - `envelope-key-missing`: a constant top-level string key present in at least 90% of JSON object expected outputs is missing from another.
 - `rule-by-example` flags rules-text lines outside code fences that contain a list ending in `, ...)` or `, …)`, the abbreviation `etc.`, or the phrase `and so on`.
+- `lifecycle-missing` warns when the folder has no `dag.md`.
+- `lifecycle-step-missing` flags each missing target among `source`, `build`, `test`, `install`, and `run`. Declare targets as `### NAME` headings under `## Tasks`.
+- `lifecycle-effects-missing` flags any target missing an `Effects:` line before its code block.
+- `lifecycle-band-missing` flags any target missing a valid `Band:` line before its code block. Use `L1` through `L5` with optional explanatory text, or the exact value `none` or `unmeasured`.
 
-After running a file named `CONTRACT.md`, `conform run` prints a one-line advisory to stderr if the spec check succeeds with findings.
+After running a file named `CONTRACT.md`, `conform run` prints a one-line advisory to stderr with the combined error and warning count if the spec check succeeds with findings.
 
 ## Use
 
