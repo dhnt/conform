@@ -12,11 +12,11 @@ import (
 
 func TestSpecCheckCleanAndFindings(t *testing.T) {
 	v1Dir := filepath.Join("..", "spec", "testdata", "form-spec-v1")
-	v2Dir := filepath.Join("..", "spec", "testdata", "form-spec-v2")
+	v3Dir := filepath.Join("..", "spec", "testdata", "form-spec-v3")
 
-	t.Run("v2_clean_text", func(t *testing.T) {
+	t.Run("v3_clean_text", func(t *testing.T) {
 		var out, errb bytes.Buffer
-		code := Run([]string{"spec", "check", v2Dir}, &out, &errb)
+		code := Run([]string{"spec", "check", v3Dir}, &out, &errb)
 		if code != 0 {
 			t.Fatalf("code=%d want 0; stdout=%q stderr=%q", code, out.String(), errb.String())
 		}
@@ -25,9 +25,9 @@ func TestSpecCheckCleanAndFindings(t *testing.T) {
 		}
 	})
 
-	t.Run("v2_clean_json", func(t *testing.T) {
+	t.Run("v3_clean_json", func(t *testing.T) {
 		var out, errb bytes.Buffer
-		code := Run([]string{"spec", "check", v2Dir, "--json"}, &out, &errb)
+		code := Run([]string{"spec", "check", v3Dir, "--json"}, &out, &errb)
 		if code != 0 {
 			t.Fatalf("code=%d want 0; stdout=%q stderr=%q", code, out.String(), errb.String())
 		}

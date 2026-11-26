@@ -32,6 +32,10 @@ var (
 	closedWordRe       = regexp.MustCompile(`(?i)\bclosed\b`)
 	templateValueRe    = regexp.MustCompile(`(\.\.\.|\{(?:ID|PORT|TIME|KEY)\})`)
 
+	ruleByExampleRe = regexp.MustCompile(`(?i),[ \t]*(?:\.\.\.|…)\)|\betc\.|\band so on\b`)
+	inlineCodeRe    = regexp.MustCompile("`+[^`]*`+")
+	quotedEllipses  = strings.NewReplacer("...", "_", "…", "_")
+
 	openObjTailRe  = regexp.MustCompile(`,\s*\.\.\.\s*\}`)
 	openObjEmptyRe = regexp.MustCompile(`\{\s*\.\.\.\s*\}`)
 	openArrTailRe  = regexp.MustCompile(`,\s*\.\.\.\s*\]`)
@@ -64,8 +68,7 @@ func Check(dir string) ([]Finding, error) {
 		return nil, err
 	}
 
-	rulesText := extractRulesText(string(contractBytes))
-	findings := []Finding{}
+	rulesText, findings := checkRulesText(string(contractBytes))
 
 	// Rule 1: feature-no-acceptance
 	for _, f := range features {
@@ -332,40 +335,55 @@ func listExamples(dir string) ([]string, error) {
 	return out, nil
 }
 
-func extractRulesText(src string) string {
+func checkRulesText(src string) (string, []Finding) {
 	text := strings.ReplaceAll(src, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
 	lines := strings.Split(text, "\n")
 
 	var out []string
 	inAssertion := false
-	fenceLen := 0
+	var fence string
+	findings := []Finding{}
 
-	for _, line := range lines {
+	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if n := leadingBackticks(trimmed); n >= 3 {
-			if fenceLen == 0 {
-				fenceLen = n
-			} else if n >= fenceLen && strings.Trim(trimmed, "` \t") == "" {
-				fenceLen = 0
+		inFence := fence != ""
+		if inFence {
+			if strings.HasPrefix(trimmed, fence) && strings.Trim(trimmed, fence[:1]) == "" {
+				fence = ""
 			}
-		} else if fenceLen == 0 && anyHeadingRe.MatchString(trimmed) {
+		} else if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
+			n := len(trimmed) - len(strings.TrimLeft(trimmed, trimmed[:1]))
+			fence = trimmed[:n]
+			inFence = true
+		} else if anyHeadingRe.MatchString(trimmed) {
 			inAssertion = assertionHeadingRe.MatchString(trimmed)
 		}
 
-		if !inAssertion {
-			out = append(out, line)
+		if inAssertion {
+			continue
+		}
+		out = append(out, line)
+		if inFence {
+			continue
+		}
+
+		// Ellipses in quoted code examples describe literal syntax.
+		prose := inlineCodeRe.ReplaceAllStringFunc(line, func(span string) string {
+			if strings.Contains(span, `"`) {
+				return quotedEllipses.Replace(span)
+			}
+			return span
+		})
+		if match := ruleByExampleRe.FindString(prose); match != "" {
+			findings = append(findings, Finding{
+				Rule:    "rule-by-example",
+				Subject: fmt.Sprintf("CONTRACT.md:%d", i+1),
+				Message: fmt.Sprintf("%q: define the set (the decision rule) and give boundary examples", match),
+			})
 		}
 	}
-	return strings.Join(out, "\n")
-}
-
-func leadingBackticks(s string) int {
-	n := 0
-	for n < len(s) && s[n] == '`' {
-		n++
-	}
-	return n
+	return strings.Join(out, "\n"), findings
 }
 
 func assertionsMentionPath(assertions []contract.Assertion, rel string) bool {

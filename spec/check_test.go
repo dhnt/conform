@@ -49,6 +49,16 @@ func TestCheckFormSpecV2(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Check(form-spec-v2): %v", err)
 	}
+	if len(findings) != 1 || findings[0].Rule != "rule-by-example" || findings[0].Subject != "CONTRACT.md:24" {
+		t.Fatalf("got %+v, want rule-by-example on the secret-name rule", findings)
+	}
+}
+
+func TestCheckFormSpecV3(t *testing.T) {
+	findings, err := Check(filepath.Join("testdata", "form-spec-v3"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(findings) != 0 {
 		t.Fatalf("got findings %+v, want none", findings)
 	}
@@ -289,5 +299,39 @@ func TestCheckUnreadableOrInvalidInputs(t *testing.T) {
 	dirBadContract := writeSpecDir(t, "### A-01\nmissing fence\n", "- id: x\n  status: tbd\n", nil)
 	if _, err := Check(dirBadContract); err == nil {
 		t.Error("Check(bad CONTRACT.md) = nil, want error")
+	}
+}
+
+func TestRuleByExample(t *testing.T) {
+	for _, tc := range []struct{ line, match string }{
+		{"Names (`api_key`, `db_password`, ...)", ", ...)"},
+		{"Letters (A, B, …)", ", …)"},
+		{"Accept letters, ETC.", "ETC."},
+		{"Use letters AND SO ON.", "AND SO ON"},
+		{"JSON markers: `{\"...\": \"...\", \"key\": \"...\"}`", ""},
+		{"Literal `\"...\"` or `call(\"a\", ...)`.", ""},
+		{"Literal `call(\"a\", ...)` and so on.", "and so on"},
+		{"Examples such as apples and pears, e.g. Anjou.", ""},
+		{"netc. and so only", ""},
+	} {
+		t.Run(tc.line, func(t *testing.T) {
+			md := "### A-01\nExamples, etc.\n```console\n$ echo ok\nok\n```\nexit: 0\n" +
+				"## Rules\n````text\n```\nA, B, etc.\n````\n" + tc.line + "\n"
+			dir := writeSpecDir(t, md, "- id: letters\n  status: tbd\n", nil)
+			findings, err := Check(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.match == "" {
+				if len(findings) != 0 {
+					t.Fatalf("unexpected findings: %+v", findings)
+				}
+				return
+			}
+			want := Finding{"rule-by-example", "CONTRACT.md:13", fmt.Sprintf("%q: define the set (the decision rule) and give boundary examples", tc.match)}
+			if len(findings) != 1 || findings[0] != want {
+				t.Fatalf("got %+v, want %+v", findings, want)
+			}
+		})
 	}
 }

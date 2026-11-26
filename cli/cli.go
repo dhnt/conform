@@ -16,6 +16,7 @@ import (
 
 	"github.com/dhnt/conform"
 	"github.com/dhnt/conform/contract"
+	"github.com/dhnt/conform/spec"
 )
 
 const usage = `usage: conform <command> [args]
@@ -135,6 +136,13 @@ func runContract(args []string, stdout, stderr io.Writer) int {
 			} else {
 				fmt.Fprintf(stdout, "%s %s %s\n", r.Status, r.Name, detail)
 			}
+		}
+	}
+
+	if filepath.Base(opts.contractPath) == "CONTRACT.md" {
+		dir := filepath.Dir(opts.contractPath)
+		if findings, err := spec.Check(dir); err == nil && len(findings) > 0 {
+			fmt.Fprintf(stderr, "conform: note: spec check reports %d finding(s) for this spec (run \"conform spec check %s\"); where a rule is underspecified, do not guess silently\n", len(findings), dir)
 		}
 	}
 

@@ -62,6 +62,9 @@ clean, 1 when findings are reported, and 2 on usage or unreadable input.
 - `flag-undefined`: a `--flag` used across three or more distinct verbs in assertion commands is never mentioned in the `CONTRACT.md` rules text.
 - `closed-undeclared`: the `CONTRACT.md` rules text never contains the word `closed` while at least one JSON object expected output lacks `"...":"..."`.
 - `envelope-key-missing`: a constant top-level string key present in at least 90% of JSON object expected outputs is missing from another.
+- `rule-by-example` flags rules-text lines outside code fences that contain a list ending in `, ...)` or `, …)`, the abbreviation `etc.`, or the phrase `and so on`.
+
+After running a file named `CONTRACT.md`, `conform run` prints a one-line advisory to stderr if the spec check succeeds with findings.
 
 ## Use
 

@@ -184,3 +184,46 @@ func TestRunContractUsageAndErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestRunSpecAdvisory(t *testing.T) {
+	for _, outcome := range []struct {
+		expected string
+		code     int
+	}{{"ok", 0}, {"different", 1}} {
+		for _, format := range []string{"--json=false", "--json"} {
+			dir := t.TempDir()
+			md := "Names, etc.\n### A-01\nPrint.\n```console\n$ echo ok\n" + outcome.expected + "\n```\nexit: 0\n"
+			write := func(name, contents string) {
+				t.Helper()
+				if err := os.WriteFile(filepath.Join(dir, name), []byte(contents), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var baseline string
+			run := func(name, note string) {
+				t.Helper()
+				var out, errb bytes.Buffer
+				code := Run([]string{"run", filepath.Join(dir, name), format}, &out, &errb)
+				if code != outcome.code || errb.String() != note {
+					t.Fatalf("%s %s: code=%d stderr=%q, want %d and %q", name, format, code, errb.String(), outcome.code, note)
+				}
+				if baseline == "" {
+					baseline = out.String()
+					if baseline == "" || (format == "--json" && !json.Valid(out.Bytes())) {
+						t.Fatalf("unexpected baseline output %q", baseline)
+					}
+				} else if out.String() != baseline {
+					t.Fatalf("stdout=%q, want %q", out.String(), baseline)
+				}
+			}
+			write("CONTRACT.md", md)
+			run("CONTRACT.md", "") // Missing features.yaml.
+			write("features.yaml", "- id: names\n  status: tbd\n")
+			write("other.md", md)
+			run("other.md", "")
+			run("CONTRACT.md", "conform: note: spec check reports 1 finding(s) for this spec (run \"conform spec check "+dir+"\"); where a rule is underspecified, do not guess silently\n")
+			write("CONTRACT.md", strings.Replace(md, "Names, etc.", "Names are ASCII letters.", 1))
+			run("CONTRACT.md", "")
+		}
+	}
+}
