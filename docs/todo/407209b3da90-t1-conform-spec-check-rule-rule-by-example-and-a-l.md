@@ -3,14 +3,18 @@ id: 407209b3da90
 kind: feature
 title: 'T1 conform: spec check rule rule-by-example, and a lint advisory in conform run'
 seq: 766
-status: todo
+status: done
 priority: p0
 labels:
     - conform
 created: 2026-11-26T12:20:42.489048Z
+weave: 9
+assignee: codex-gpt6.2-astra
 sprint: 729
 sprint_id: 23ff5447-840d-5644-a78d-e4b4bd799d92
 sprint_title: 'Shaping tooling: the spec linter catches rules given by example, and the judge advises builders to lint'
+closed: 2026-11-26T12:32:30.247272Z
+closed_by: claude-opus5.5
 ---
 
 Operator direction 2026-11-26: bashy's tooling should help agents succeed at shaping, for example by advising them to run the spec linter. Evidence: in umbrella Sprint 723 a build accepted `stripe-api-key` because the form contract gives its secret-name rule by example only ("secret-named fields (`api_key`, `db_password`, ...)").
