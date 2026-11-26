@@ -51,6 +51,18 @@ processes left by a CLI step; leave it off when later assertions need a server.
 and UI mutants and reports the killed fraction. Add `--json` for a
 `cert.MutationReport`.
 
+## Spec check
+
+`conform spec check DIR [--json]` statically checks a spec folder (`CONTRACT.md`,
+`features.yaml`, `examples/`) without running any commands. It exits 0 when
+clean, 1 when findings are reported, and 2 on usage or unreadable input.
+
+- `feature-no-acceptance`: a feature in `features.yaml` whose status is not `tbd` has no acceptance item.
+- `example-unreferenced`: a file under `examples/` never appears in an assertion command of `CONTRACT.md`.
+- `flag-undefined`: a `--flag` used across three or more distinct verbs in assertion commands is never mentioned in the `CONTRACT.md` rules text.
+- `closed-undeclared`: the `CONTRACT.md` rules text never contains the word `closed` while at least one JSON object expected output lacks `"...":"..."`.
+- `envelope-key-missing`: a constant top-level string key present in at least 90% of JSON object expected outputs is missing from another.
+
 ## Use
 
 ```sh
@@ -67,6 +79,7 @@ bashy ships conform as `bashy conform`.
 | `contract` | `CONTRACT.md` parser, normalization, runner |
 | `walk` | DOM inventory: Go HTML walk + embedded JS asset, parity-tested |
 | `cert` | noise baseline, mutation harness, verdict, sealed evidence |
+| `spec` | static soundness checks for a spec folder |
 | `cli` | the command line (`Run`), shared by `cmd/conform` and `bashy conform` |
 | `cmd/conform` | the standalone binary |
 

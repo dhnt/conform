@@ -24,6 +24,7 @@ commands:
   run       execute a CONTRACT.md suite
   cert      certify a candidate against a reference and write sealed evidence
   mutate    measure contract mutation strength
+  spec      check static soundness of a spec folder
   version   print the suite version
 `
 
@@ -66,6 +67,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runCert(args[1:], stdout, stderr)
 	case "mutate":
 		return runMutate(args[1:], stdout, stderr)
+	case "spec":
+		return runSpec(args[1:], stdout, stderr)
 	case "version":
 		fmt.Fprintln(stdout, conform.Version)
 		return 0
