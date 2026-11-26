@@ -69,7 +69,7 @@ function walkInventory(root) {
       if (kind==='textarea') f.kind='textarea';
       else if (kind==='select') f.kind=has(n,'multiple') ? 'multi' : 'choice';
       else if (kind==='radio') { f.kind='choice'; if (f.options.length===2 && ((f.options[0].toLowerCase()==='yes' && f.options[1].toLowerCase()==='no') || (f.options[0].toLowerCase()==='no' && f.options[1].toLowerCase()==='yes'))) f.kind='yes-no'; }
-      else if (kind==='checkbox') f.kind=members.length===1 ? 'yes-no' : 'multi';
+      else if (kind==='checkbox') { f.kind=members.length===1 ? 'yes-no' : 'multi'; if (members.length===1) f.options=[]; }
       else if (kind==='file') f.kind='file'; else f.kind='text';
       f.kind=group && attr(group,'data-kind') || attr(n,'data-kind') || f.kind;
       out.fields.push(f);

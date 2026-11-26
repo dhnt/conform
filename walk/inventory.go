@@ -416,7 +416,10 @@ func Inventory(r io.Reader) (InventoryResult, error) {
 				}
 			case "checkbox":
 				if len(members) == 1 {
+					// A lone checkbox is a yes-no field: checked is yes. Its label
+					// names the field, not an option.
 					f.Kind = "yes-no"
+					f.Options = []string{}
 				} else {
 					f.Kind = "multi"
 				}
