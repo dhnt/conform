@@ -114,6 +114,12 @@ func TestParity(t *testing.T) {
 					t.Fatal(why)
 				}
 			}
+			if path == "testdata/yesno-select.html" {
+				def := []Field{{ID: "subscribe", Label: "Subscribe?", Kind: "yes-no", Required: true}, {ID: "contact", Label: "Preferred contact", Kind: "choice", Options: []string{"email", "phone"}}}
+				if ok, why := CompareWithDefinition(got, def, []string{"Submit answers"}); !ok {
+					t.Fatalf("yes/no select: %s (%#v)", why, got.Fields)
+				}
+			}
 			if path == "testdata/single-checkbox.html" {
 				def := []Field{{ID: "name", Label: "Full name", Kind: "text", Required: true}, {ID: "subscribe", Label: "Subscribe?", Kind: "yes-no", Required: true}}
 				if ok, why := CompareWithDefinition(got, def, []string{"Submit answers"}); !ok {

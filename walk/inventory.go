@@ -408,6 +408,11 @@ func Inventory(r io.Reader) (InventoryResult, error) {
 					f.Kind = "multi"
 				} else {
 					f.Kind = "choice"
+					// A single select offering exactly yes and no answers a yes-no
+					// question, the same as a yes/no radio pair.
+					if len(f.Options) == 2 && ((strings.EqualFold(f.Options[0], "yes") && strings.EqualFold(f.Options[1], "no")) || (strings.EqualFold(f.Options[0], "no") && strings.EqualFold(f.Options[1], "yes"))) {
+						f.Kind = "yes-no"
+					}
 				}
 			case "radio":
 				f.Kind = "choice"
