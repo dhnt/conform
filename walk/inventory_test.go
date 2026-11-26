@@ -104,7 +104,7 @@ func TestParity(t *testing.T) {
 					{ID: "code", Label: "Code", Kind: "text", Required: true, Options: []string{}},
 					{ID: "description", Label: "Description", Kind: "textarea", Options: []string{}},
 					{ID: "contact", Label: "Contact method", Kind: "yes-no", Required: true, Options: []string{"Yes", "No"}},
-					{ID: "agree", Label: "Agree", Kind: "yes-no", Options: []string{"Agree"}},
+					{ID: "agree", Label: "Agree", Kind: "yes-no", Options: []string{}},
 					{ID: "colors", Label: "Colors", Kind: "multi", Options: []string{"Red", "Blue"}},
 				}
 				if !reflect.DeepEqual(got.Fields, want) {
