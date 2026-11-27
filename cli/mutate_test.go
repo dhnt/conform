@@ -72,3 +72,51 @@ func TestMutateReportsFailingBaselineNames(t *testing.T) {
 		t.Fatalf("exit %d: %s", code, errb.String())
 	}
 }
+
+// Shards partition the mutant set: N runs with K = 0..N-1 are disjoint and
+// together equal one unsharded run, so a large contract mutates in parallel
+// with conform alone (Sprint 737 needed a bespoke shard tool for 559 mutants).
+func TestMutateShardsPartitionTheMutantSet(t *testing.T) {
+	md := "### F-01\nList forms.\n```console\n$ form list\nID\tSTATUS\n```\nexit: 0\n\n### F-02\nList forms again.\n```console\n$ form list\nID\tSTATUS\n```\nexit: 0\n"
+	contractFile := filepath.Join(t.TempDir(), "CONTRACT.md")
+	if err := os.WriteFile(contractFile, []byte(md), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, bin := fixturePaths(t)
+	run := func(extra ...string) cert.MutationReport {
+		t.Helper()
+		var out, errb bytes.Buffer
+		args := append([]string{"mutate", contractFile, "--path", bin, "--dir", t.TempDir(), "--fresh-home", "--json"}, extra...)
+		if code := Run(args, &out, &errb); code != 0 {
+			t.Fatalf("%v: exit %d: %s\n%s", extra, code, out.String(), errb.String())
+		}
+		var r cert.MutationReport
+		if err := json.Unmarshal(out.Bytes(), &r); err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	full := run()
+	a, b := run("--shards", "2", "--shard", "0"), run("--shards=2", "--shard=1")
+	if a.Total+b.Total != full.Total || a.Total == 0 || b.Total == 0 {
+		t.Fatalf("shard totals %d + %d != %d", a.Total, b.Total, full.Total)
+	}
+	seen := map[string]bool{}
+	for _, m := range append(a.Mutants, b.Mutants...) {
+		if seen[m.Name] {
+			t.Fatalf("mutant %s in both shards", m.Name)
+		}
+		seen[m.Name] = true
+	}
+	for _, m := range full.Mutants {
+		if !seen[m.Name] {
+			t.Fatalf("mutant %s in no shard", m.Name)
+		}
+	}
+	for _, bad := range [][]string{{"--shards", "0"}, {"--shards", "2", "--shard", "2"}, {"--shard", "-1"}, {"--shards", "x"}, {"--shards"}} {
+		var out, errb bytes.Buffer
+		if code := Run(append([]string{"mutate", contractFile}, bad...), &out, &errb); code != 2 {
+			t.Fatalf("%v: exit %d, want 2", bad, code)
+		}
+	}
+}
