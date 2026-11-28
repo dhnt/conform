@@ -24,7 +24,7 @@ type knownIssue struct {
 var (
 	kiHeaderRe   = regexp.MustCompile(`^-\s+(KI-\d+)\b(?:\s+\[([^\]]*)\])?`)
 	kiFieldRe    = regexp.MustCompile(`^\s+([a-z][a-z-]*):\s*(.*)$`)
-	goTestNameRe = regexp.MustCompile(`^Test[A-Za-z0-9_]*$`)
+	goTestNameRe = regexp.MustCompile(`^Test[A-Za-z0-9_]+$`)
 )
 
 // checkShapeware applies the SKILL.md-aware rules: known issue <-> feature
@@ -51,7 +51,7 @@ func checkShapeware(dir string, features []feature, assertions []contract.Assert
 	var findings []Finding
 	findings = append(findings, checkIssueLinks(features, issues)...)
 	findings = append(findings, checkCandidateFiles(meta)...)
-	findings = append(findings, checkGoTests(features, assertions)...)
+	findings = append(findings, checkGoTests(features, assertions, implGoMod(dir))...)
 	return findings, nil
 }
 
@@ -270,8 +270,9 @@ func badGlob(g string) string {
 }
 
 // checkGoTests enforces the pinned go test form (§6): "<launcher> gotest PKG
-// NAME" expects exactly "PASS NAME".
-func checkGoTests(features []feature, assertions []contract.Assertion) []Finding {
+// NAME" expects exactly "PASS NAME". mod is the implementation's go.mod, or
+// nil when the folder stands alone.
+func checkGoTests(features []feature, assertions []contract.Assertion, mod *goMod) []Finding {
 	var out []Finding
 	for _, f := range features {
 		for i, line := range f.lines {
@@ -279,7 +280,7 @@ func checkGoTests(features []feature, assertions []contract.Assertion) []Finding
 			if !ok {
 				continue
 			}
-			if msg := goTestProblem(cmd, strings.TrimSpace(want)); msg != "" {
+			if msg := goTestProblem(cmd, strings.TrimSpace(want), mod); msg != "" {
 				out = append(out, Finding{Severity: "error", Rule: "gotest-form", Subject: fmt.Sprintf("%s#%d", f.id, i+1), Message: msg})
 			}
 		}
@@ -288,7 +289,7 @@ func checkGoTests(features []feature, assertions []contract.Assertion) []Finding
 		if a.Kind != "cli" || len(a.Commands) == 0 {
 			continue
 		}
-		msg := goTestProblem(a.Commands[len(a.Commands)-1], strings.TrimSpace(a.Expected))
+		msg := goTestProblem(a.Commands[len(a.Commands)-1], strings.TrimSpace(a.Expected), mod)
 		if msg == "" && isGoTest(a.Commands[len(a.Commands)-1]) && a.Exit != 0 {
 			msg = fmt.Sprintf("exit %d; a pinned go test passes with exit 0", a.Exit)
 		}
@@ -310,7 +311,7 @@ func isGoTest(cmd string) bool {
 }
 
 // goTestProblem returns "" when cmd is not a gotest line or is well formed.
-func goTestProblem(cmd, want string) string {
+func goTestProblem(cmd, want string, mod *goMod) string {
 	words := strings.Fields(cmd)
 	at := -1
 	for i, w := range words {
@@ -327,7 +328,7 @@ func goTestProblem(cmd, want string) string {
 		return fmt.Sprintf("gotest takes exactly PKG NAME, got %d arguments", len(args))
 	}
 	pkg, name := args[0], args[1]
-	if msg := badGoPackage(pkg); msg != "" {
+	if msg := badGoPackage(pkg, mod); msg != "" {
 		return fmt.Sprintf("package %q %s", pkg, msg)
 	}
 	if !goTestNameRe.MatchString(name) {
@@ -339,24 +340,131 @@ func goTestProblem(cmd, want string) string {
 	return ""
 }
 
-// badGoPackage accepts "." (the root package) or "./" followed by a clean
-// relative path: no empty, "." or ".." segment, and no "..." pattern, so a
-// pin names exactly one package inside the implementation.
-func badGoPackage(pkg string) string {
+// badGoPackage accepts one package, in one of three forms (§6):
+//   - "." (the root package) or "./" followed by a clean relative path: no
+//     empty, "." or ".." segment and no "..." pattern. The path may lie in a
+//     nested module of the implementation (a subdirectory with its own
+//     go.mod); the launcher runs it from that module's root.
+//   - a dependency import path, such as github.com/qiangli/yoke/pkg/chat,
+//     whose module the implementation's go.mod requires. When the folder
+//     stands alone (mod is nil) go.mod cannot be read, so a syntactically
+//     valid import path is accepted.
+func badGoPackage(pkg string, mod *goMod) string {
 	if pkg == "." {
 		return ""
 	}
-	rest, ok := strings.CutPrefix(pkg, "./")
-	if !ok || rest == "" {
-		return "must be \".\" or a ./ path inside the implementation"
+	if rest, ok := strings.CutPrefix(pkg, "./"); ok {
+		if rest == "" {
+			return "must be \".\", a ./ path inside the implementation or a dependency import path"
+		}
+		return badPathSegments(rest, "a clean ./ path")
 	}
-	for _, seg := range strings.Split(rest, "/") {
+	if strings.HasPrefix(pkg, "/") || strings.HasPrefix(pkg, "-") || strings.Contains(pkg, `\`) {
+		return "must be \".\", a ./ path inside the implementation or a dependency import path"
+	}
+	if msg := badPathSegments(pkg, "an import path"); msg != "" {
+		return msg
+	}
+	first, _, _ := strings.Cut(pkg, "/")
+	if strings.HasPrefix(first, ".") || !strings.Contains(first, ".") {
+		return "must be \".\", a ./ path inside the implementation or a dependency import path (its first element has a dot, e.g. github.com/...)"
+	}
+	if mod == nil {
+		return ""
+	}
+	if under(pkg, mod.path) {
+		return fmt.Sprintf("is in the implementation's own module %s; name it as a ./ path", mod.path)
+	}
+	for _, r := range mod.requires {
+		if under(pkg, r) {
+			return ""
+		}
+	}
+	return "is not in a module required by the implementation's go.mod; a dependency test must run at the pinned version"
+}
+
+// badPathSegments rejects an empty, "." or ".." segment, a "..." pattern
+// and characters outside an import path's.
+func badPathSegments(p, form string) string {
+	for _, seg := range strings.Split(p, "/") {
 		switch {
 		case seg == "" || seg == "." || seg == "..":
-			return "must be a clean ./ path with no empty, \".\" or \"..\" segment"
+			return "must be " + form + " with no empty, \".\" or \"..\" segment"
 		case strings.Contains(seg, "..."):
 			return "names a package pattern; a pin names exactly one package"
+		case !importSegRe.MatchString(seg):
+			return fmt.Sprintf("has segment %q; use only letters, digits and -._~+", seg)
 		}
 	}
 	return ""
+}
+
+var importSegRe = regexp.MustCompile(`^[A-Za-z0-9._~+-]+$`)
+
+func under(pkg, module string) bool {
+	return module != "" && (pkg == module || strings.HasPrefix(pkg, module+"/"))
+}
+
+// goMod is what the gotest lint reads from the implementation's go.mod.
+type goMod struct {
+	path     string   // the module directive
+	requires []string // every required module path
+}
+
+// implGoMod returns the go.mod at the root of the repository the folder
+// sits in (the nearest ancestor holding .git), the implementation the
+// launcher runs. It returns nil when the folder stands alone: no repository
+// above it, or none with a go.mod at its root.
+func implGoMod(dir string) *goMod {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return nil
+	}
+	for d := abs; ; {
+		if _, err := os.Lstat(filepath.Join(d, ".git")); err == nil {
+			b, err := os.ReadFile(filepath.Join(d, "go.mod"))
+			if err != nil {
+				return nil
+			}
+			return parseGoMod(string(b))
+		}
+		parent := filepath.Dir(d)
+		if parent == d {
+			return nil
+		}
+		d = parent
+	}
+}
+
+// parseGoMod reads the module directive and the require directives, single
+// or in a block; comments are dropped and quoted paths unquoted.
+func parseGoMod(src string) *goMod {
+	m := &goMod{}
+	inRequire := false
+	for _, line := range strings.Split(src, "\n") {
+		if i := strings.Index(line, "//"); i >= 0 {
+			line = line[:i]
+		}
+		f := strings.Fields(line)
+		if len(f) == 0 {
+			continue
+		}
+		if inRequire {
+			if f[0] == ")" {
+				inRequire = false
+			} else {
+				m.requires = append(m.requires, strings.Trim(f[0], `"`+"`"))
+			}
+			continue
+		}
+		switch {
+		case f[0] == "module" && len(f) >= 2:
+			m.path = strings.Trim(f[1], `"`+"`")
+		case f[0] == "require" && len(f) >= 2 && f[1] == "(":
+			inRequire = true
+		case f[0] == "require" && len(f) >= 3:
+			m.requires = append(m.requires, strings.Trim(f[1], `"`+"`"))
+		}
+	}
+	return m
 }

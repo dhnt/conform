@@ -154,8 +154,29 @@ func TestGoTestRules(t *testing.T) {
 			rule: "gotest-form", subject: "pin#1", message: "./ path"},
 		{name: "acceptance subtest", contract: pingContract, line: "classgo-backup gotest ./internal/backup TestRestore/sub => PASS TestRestore/sub",
 			rule: "gotest-form", subject: "pin#1", message: "top-level Go test name"},
+		{name: "acceptance bare Test name", contract: pingContract, line: "classgo-backup gotest ./internal/backup Test => PASS Test",
+			rule: "gotest-form", subject: "pin#1", message: "top-level Go test name"},
+		{name: "acceptance name pattern", contract: pingContract, line: "classgo-backup gotest ./internal/backup Test.* => PASS Test.*",
+			rule: "gotest-form", subject: "pin#1", message: "top-level Go test name"},
 		{name: "acceptance arity", contract: pingContract, line: "classgo-backup gotest ./internal/backup => PASS",
 			rule: "gotest-form", subject: "pin#1", message: "exactly PKG NAME"},
+		{name: "acceptance nested module path", contract: pingContract, line: "bashy-agent gotest ./yoke/mb TestMB => PASS TestMB"},
+		{name: "acceptance dependency import path standing alone", contract: pingContract, line: "bashy-agent gotest github.com/qiangli/yoke/pkg/chat TestJoin => PASS TestJoin"},
+		{name: "acceptance import path pattern", contract: pingContract, line: "bashy-agent gotest github.com/qiangli/yoke/... TestJoin => PASS TestJoin",
+			rule: "gotest-form", subject: "pin#1", message: "package pattern"},
+		{name: "acceptance import path with dot-dot", contract: pingContract, line: "bashy-agent gotest github.com/qiangli/../yoke/pkg TestJoin => PASS TestJoin",
+			rule: "gotest-form", subject: "pin#1", message: `".." segment`},
+		{name: "acceptance parent path", contract: pingContract, line: "bashy-agent gotest ../yoke/pkg TestJoin => PASS TestJoin",
+			rule: "gotest-form", subject: "pin#1", message: `".." segment`},
+		{name: "acceptance absolute path", contract: pingContract, line: "bashy-agent gotest /src/yoke/pkg TestJoin => PASS TestJoin",
+			rule: "gotest-form", subject: "pin#1", message: "dependency import path"},
+		{name: "acceptance hidden first element", contract: pingContract, line: "bashy-agent gotest .hidden/pkg TestJoin => PASS TestJoin",
+			rule: "gotest-form", subject: "pin#1", message: "dependency import path"},
+		{name: "acceptance standard library", contract: pingContract, line: "bashy-agent gotest strings TestJoin => PASS TestJoin",
+			rule: "gotest-form", subject: "pin#1", message: "dependency import path"},
+		{name: "acceptance import path bad character", contract: pingContract, line: "bashy-agent gotest github.com/q$x/pkg TestJoin => PASS TestJoin",
+			rule: "gotest-form", subject: "pin#1", message: "letters, digits"},
+		{name: "contract dependency import path", contract: gotestContract("bashy-agent gotest github.com/qiangli/yoke/pkg/bus TestAdHoc", "PASS TestAdHoc", "0"), line: "app ping => ok"},
 		{name: "contract pinned test", contract: gotestContract("classgo-backup gotest ./internal/backup TestRestore", "PASS TestRestore", "0"), line: "app ping => ok"},
 		{name: "contract wrong expected", contract: gotestContract("classgo-backup gotest ./internal/backup TestRestore", "FAIL TestRestore", "1"), line: "app ping => ok",
 			rule: "gotest-form", subject: "B-01", message: `exactly "PASS TestRestore"`},
@@ -165,6 +186,65 @@ func TestGoTestRules(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got := checkWith(t, tc.contract, feat("pin", "verified", "", tc.line), "", nil)
 			assertOne(t, got, tc.rule, tc.subject, tc.message)
+		})
+	}
+}
+
+// TestGoTestRulesInsideTheImplementation lints a folder that sits in its
+// implementation (a repository with a go.mod at its root): an import path
+// must then be in a module that go.mod requires.
+func TestGoTestRulesInsideTheImplementation(t *testing.T) {
+	gomod := "module github.com/qiangli/bashy\n\ngo 1.27.0\n\n" +
+		"require github.com/qiangli/yoke v0.0.0-20261128093718-d5e2b26750e8 // pinned\n\n" +
+		"require (\n\t\"github.com/qiangli/yoke/pkg/oci\" v0.0.0-20261128093718-d5e2b26750e8 // indirect\n\tgolang.org/x/net v0.63.0\n)\n\n" +
+		"replace github.com/example/replaced => ../replaced\n"
+	for _, tc := range []struct {
+		name, gomod, line, rule, message string
+		noGit                            bool
+	}{
+		{name: "required module root", gomod: gomod, line: "bashy-agent gotest github.com/qiangli/yoke TestA => PASS TestA"},
+		{name: "required module package", gomod: gomod, line: "bashy-agent gotest github.com/qiangli/yoke/pkg/chat TestA => PASS TestA"},
+		{name: "required in a block, quoted", gomod: gomod, line: "bashy-agent gotest github.com/qiangli/yoke/pkg/oci/sub TestA => PASS TestA"},
+		{name: "nested module path", gomod: gomod, line: "bashy-agent gotest ./yoke/inbox TestA => PASS TestA"},
+		{name: "not required", gomod: gomod, line: "bashy-agent gotest github.com/qiangli/other/pkg TestA => PASS TestA",
+			rule: "gotest-form", message: "not in a module required by the implementation's go.mod"},
+		{name: "prefix is not a module", gomod: gomod, line: "bashy-agent gotest github.com/qiangli/yokeextra/pkg TestA => PASS TestA",
+			rule: "gotest-form", message: "not in a module required"},
+		{name: "replace only", gomod: gomod, line: "bashy-agent gotest github.com/example/replaced TestA => PASS TestA",
+			rule: "gotest-form", message: "not in a module required"},
+		{name: "own module", gomod: gomod, line: "bashy-agent gotest github.com/qiangli/bashy/yoke/mb TestA => PASS TestA",
+			rule: "gotest-form", message: "own module github.com/qiangli/bashy; name it as a ./ path"},
+		{name: "repository without go.mod stands alone", line: "bashy-agent gotest github.com/qiangli/other/pkg TestA => PASS TestA"},
+		{name: "no repository stands alone", gomod: gomod, noGit: true, line: "bashy-agent gotest github.com/qiangli/other/pkg TestA => PASS TestA"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			if !tc.noGit {
+				if err := os.Mkdir(filepath.Join(root, ".git"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.gomod != "" {
+				if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte(tc.gomod), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			dir := filepath.Join(root, "shapeware", "agent")
+			if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Rename(writeSpecDir(t, pingContract, feat("pin", "verified", "", tc.line), nil), dir); err != nil {
+				t.Fatal(err)
+			}
+			got, err := Check(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			subject := ""
+			if tc.rule != "" {
+				subject = "pin#1"
+			}
+			assertOne(t, got, tc.rule, subject, tc.message)
 		})
 	}
 }
