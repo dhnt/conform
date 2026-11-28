@@ -199,6 +199,12 @@ func Check(dir string) ([]Finding, error) {
 		}
 	}
 
+	more, err := checkShapeware(dir, features, assertions)
+	if err != nil {
+		return nil, err
+	}
+	findings = append(findings, more...)
+
 	dag, err := os.ReadFile(filepath.Join(dir, "dag.md"))
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
@@ -225,7 +231,9 @@ func Check(dir string) ([]Finding, error) {
 type feature struct {
 	id         string
 	status     string
+	resolves   string
 	acceptance int
+	lines      []string // acceptance lines, in order
 }
 
 func parseFeatures(src string) []feature {
@@ -270,6 +278,7 @@ func parseFeatures(src string) []feature {
 			item := strings.TrimSpace(strings.TrimPrefix(trimmed, "-"))
 			if item != "" {
 				cur.acceptance++
+				cur.lines = append(cur.lines, cleanYAMLScalar(item))
 			}
 			continue
 		}
@@ -291,6 +300,8 @@ func applyFeatureField(f *feature, key, val string, inAcceptance *bool) {
 		f.id = val
 	case "status":
 		f.status = val
+	case "resolves":
+		f.resolves = val
 	case "acceptance":
 		if val == "" {
 			*inAcceptance = true
@@ -298,6 +309,7 @@ func applyFeatureField(f *feature, key, val string, inAcceptance *bool) {
 			inner := strings.TrimSpace(val[1 : len(val)-1])
 			if inner != "" {
 				f.acceptance++
+				f.lines = append(f.lines, cleanYAMLScalar(inner))
 			}
 		}
 	}

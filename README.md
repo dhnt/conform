@@ -70,6 +70,17 @@ include a `severity` of `error` or `warning`.
 - `lifecycle-effects-missing` flags any target missing an `Effects:` line before its code block.
 - `lifecycle-band-missing` flags any target missing a valid `Band:` line before its code block. Use `L1` through `L5` with optional explanatory text, or the exact value `none` or `unmeasured`.
 
+When the folder has a `SKILL.md`, the check also reads its frontmatter `metadata` and the `- KI-<n> [status]` entries under `## Known issues` (and in `references/known-issues.md`, if present). Shapeware spec §4.2, §4.3b, §5 and §6 define the keys.
+
+- `resolves-unknown-ki`: a feature's `resolves: KI-<n>` names no known issue.
+- `resolves-no-acceptance`: a feature with `resolves:` has no acceptance line, whatever its status.
+- `resolves-ki-not-fixed`: a `verified` feature resolves a known issue that is not `fixed`.
+- `ki-fixed-without-fixed-by`: a `fixed` known issue has no `fixed-by: <feature-id>`.
+- `ki-fixed-by-unknown`, `ki-fixed-by-not-verified`, `ki-fixed-by-mismatch`: `fixed-by:` names a missing feature, a feature that is not `verified`, or a feature whose `resolves:` is not this issue.
+- `candidate-files-invalid`: a glob in `metadata.candidate-files` or `metadata.build-outputs` is empty, absolute, has an empty, `.` or `..` segment, uses `**`, or is malformed.
+- `candidate-files-not-lifted`: `metadata.candidate-files` is set but `metadata.implementation` is not.
+- `gotest-form`: an acceptance line or CLI assertion that runs `<launcher> gotest PKG NAME` must take exactly a `./` package and a top-level `Test...` name, expect exactly `PASS NAME`, and (in `CONTRACT.md`) exit 0.
+
 After running a file named `CONTRACT.md`, `conform run` prints a one-line advisory to stderr with the combined error and warning count if the spec check succeeds with findings.
 
 ## Use
