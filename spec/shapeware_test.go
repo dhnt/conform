@@ -249,6 +249,64 @@ func TestGoTestRulesInsideTheImplementation(t *testing.T) {
 	}
 }
 
+// TestGoTestPathSymlinks: inside its implementation the lint resolves a
+// ./path through symlinks, as the launcher does, and rejects one that
+// leaves the implementation. Standing alone the check stays lexical.
+func TestGoTestPathSymlinks(t *testing.T) {
+	outside := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(outside, "pkg"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, line, rule, message string
+		noGit                     bool
+	}{
+		{name: "plain directory", line: "app gotest ./internal/real TestA => PASS TestA"},
+		{name: "symlink inside", line: "app gotest ./inside TestA => PASS TestA"},
+		{name: "missing path", line: "app gotest ./internal/nope TestA => PASS TestA"},
+		{name: "symlink out", line: "app gotest ./escape/pkg TestA => PASS TestA",
+			rule: "gotest-form", message: "resolves outside the implementation"},
+		{name: "symlink out standing alone is lexical", noGit: true, line: "app gotest ./escape/pkg TestA => PASS TestA"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			if !tc.noGit {
+				if err := os.Mkdir(filepath.Join(root, ".git"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.invalid/app\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Join(root, "internal", "real"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(filepath.Join(root, "internal", "real"), filepath.Join(root, "inside")); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(outside, filepath.Join(root, "escape")); err != nil {
+				t.Fatal(err)
+			}
+			dir := filepath.Join(root, "shapeware", "app")
+			if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Rename(writeSpecDir(t, pingContract, feat("pin", "verified", "", tc.line), nil), dir); err != nil {
+				t.Fatal(err)
+			}
+			got, err := Check(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			subject := ""
+			if tc.rule != "" {
+				subject = "pin#1"
+			}
+			assertOne(t, got, tc.rule, subject, tc.message)
+		})
+	}
+}
+
 func TestParseSkillPieces(t *testing.T) {
 	meta, body := splitSkill("---\nname: x\nmetadata:\n  version: \"1.2.3\"\n  candidate-files: \"a/*.go b/*\"\nlicense: MIT\n---\n# x\n")
 	if meta["version"] != "1.2.3" || meta["candidate-files"] != "a/*.go b/*" || meta["license"] != "" || body != "# x\n" {

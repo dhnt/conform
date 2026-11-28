@@ -344,7 +344,9 @@ func goTestProblem(cmd, want string, mod *goMod) string {
 //   - "." (the root package) or "./" followed by a clean relative path: no
 //     empty, "." or ".." segment and no "..." pattern. The path may lie in a
 //     nested module of the implementation (a subdirectory with its own
-//     go.mod); the launcher runs it from that module's root.
+//     go.mod); the launcher runs it from that module's root. Inside its
+//     implementation the path is also resolved through symlinks and must
+//     stay inside; standing alone the check is lexical.
 //   - a dependency import path, such as github.com/qiangli/yoke/pkg/chat,
 //     whose module the implementation's go.mod requires. When the folder
 //     stands alone (mod is nil) go.mod cannot be read, so a syntactically
@@ -357,7 +359,10 @@ func badGoPackage(pkg string, mod *goMod) string {
 		if rest == "" {
 			return "must be \".\", a ./ path inside the implementation or a dependency import path"
 		}
-		return badPathSegments(rest, "a clean ./ path")
+		if msg := badPathSegments(rest, "a clean ./ path"); msg != "" {
+			return msg
+		}
+		return escapesImpl(rest, mod)
 	}
 	if strings.HasPrefix(pkg, "/") || strings.HasPrefix(pkg, "-") || strings.Contains(pkg, `\`) {
 		return "must be \".\", a ./ path inside the implementation or a dependency import path"
@@ -401,12 +406,35 @@ func badPathSegments(p, form string) string {
 
 var importSegRe = regexp.MustCompile(`^[A-Za-z0-9._~+-]+$`)
 
+// escapesImpl resolves a clean ./path through symlinks, as the launcher
+// does, when the folder sits inside its implementation, and rejects one that
+// leaves it. A path that does not exist is left to the launcher (FAIL NAME).
+// Standing alone (mod is nil) the check is lexical only.
+func escapesImpl(rest string, mod *goMod) string {
+	if mod == nil || mod.root == "" {
+		return ""
+	}
+	root, err := filepath.EvalSymlinks(mod.root)
+	if err != nil {
+		return ""
+	}
+	got, err := filepath.EvalSymlinks(filepath.Join(root, filepath.FromSlash(rest)))
+	if err != nil {
+		return ""
+	}
+	if rel, err := filepath.Rel(root, got); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "resolves outside the implementation through a symlink"
+	}
+	return ""
+}
+
 func under(pkg, module string) bool {
 	return module != "" && (pkg == module || strings.HasPrefix(pkg, module+"/"))
 }
 
 // goMod is what the gotest lint reads from the implementation's go.mod.
 type goMod struct {
+	root     string   // the implementation root, the directory holding go.mod
 	path     string   // the module directive
 	requires []string // every required module path
 }
@@ -426,7 +454,9 @@ func implGoMod(dir string) *goMod {
 			if err != nil {
 				return nil
 			}
-			return parseGoMod(string(b))
+			m := parseGoMod(string(b))
+			m.root = d
+			return m
 		}
 		parent := filepath.Dir(d)
 		if parent == d {
