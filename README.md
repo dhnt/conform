@@ -79,7 +79,7 @@ When the folder has a `SKILL.md`, the check also reads its frontmatter `metadata
 - `ki-fixed-by-unknown`, `ki-fixed-by-not-verified`, `ki-fixed-by-mismatch`: `fixed-by:` names a missing feature, a feature that is not `verified`, or a feature whose `resolves:` is not this issue.
 - `candidate-files-invalid`: a glob in `metadata.candidate-files` or `metadata.build-outputs` is empty, absolute, has an empty, `.` or `..` segment, uses `**`, or is malformed.
 - `candidate-files-not-lifted`: `metadata.candidate-files` is set but `metadata.implementation` is not.
-- `gotest-form`: an acceptance line or CLI assertion that runs `<launcher> gotest PKG NAME` must take exactly a `./` package and a top-level `Test...` name, expect exactly `PASS NAME`, and (in `CONTRACT.md`) exit 0.
+- `gotest-form`: an acceptance line or CLI assertion that runs `<launcher> gotest PKG NAME` must take exactly one package (`.`, or `./` followed by a clean relative path with no `..` segment and no `...` pattern) and a top-level `Test...` name, expect exactly `PASS NAME`, and (in `CONTRACT.md`) exit 0.
 
 After running a file named `CONTRACT.md`, `conform run` prints a one-line advisory to stderr with the combined error and warning count if the spec check succeeds with findings.
 

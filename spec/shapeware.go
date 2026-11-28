@@ -327,14 +327,36 @@ func goTestProblem(cmd, want string) string {
 		return fmt.Sprintf("gotest takes exactly PKG NAME, got %d arguments", len(args))
 	}
 	pkg, name := args[0], args[1]
-	if pkg != "." && !strings.HasPrefix(pkg, "./") {
-		return fmt.Sprintf("package %q must be a ./ path inside the implementation", pkg)
+	if msg := badGoPackage(pkg); msg != "" {
+		return fmt.Sprintf("package %q %s", pkg, msg)
 	}
 	if !goTestNameRe.MatchString(name) {
 		return fmt.Sprintf("%q is not a top-level Go test name (Test...)", name)
 	}
 	if want != "PASS "+name {
 		return fmt.Sprintf("expects %q; a pinned go test expects exactly \"PASS %s\"", want, name)
+	}
+	return ""
+}
+
+// badGoPackage accepts "." (the root package) or "./" followed by a clean
+// relative path: no empty, "." or ".." segment, and no "..." pattern, so a
+// pin names exactly one package inside the implementation.
+func badGoPackage(pkg string) string {
+	if pkg == "." {
+		return ""
+	}
+	rest, ok := strings.CutPrefix(pkg, "./")
+	if !ok || rest == "" {
+		return "must be \".\" or a ./ path inside the implementation"
+	}
+	for _, seg := range strings.Split(rest, "/") {
+		switch {
+		case seg == "" || seg == "." || seg == "..":
+			return "must be a clean ./ path with no empty, \".\" or \"..\" segment"
+		case strings.Contains(seg, "..."):
+			return "names a package pattern; a pin names exactly one package"
+		}
 	}
 	return ""
 }
